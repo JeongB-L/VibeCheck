@@ -1,0 +1,54 @@
+.landing {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+}
+
+.center {
+  text-align: center;
+}
+
+.brand {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+/* container for buttons */
+.actions {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* base button */
+.btn {
+  display: inline-block;
+  width: 13rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #000;     /* black border */
+  background-color: #fff;     /* white background */
+  color: #000;                /* black text */
+  cursor: pointer;
+}
+
+/* hover effect */
+.btn:hover {
+  background-color: #000;     /* black background */
+  color: #fff;                /* white text */
+}
+
+/* outline button is the same as base */
+.btn-outline {
+  background-color: #fff;
+  color: #000;
+}
