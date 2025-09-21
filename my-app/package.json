@@ -30,6 +30,7 @@
     "@angular/router": "^20.3.0",
     "express": "^5.1.0",
     "rxjs": "~7.8.0",
+    "supabase": "^2.40.7",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },
