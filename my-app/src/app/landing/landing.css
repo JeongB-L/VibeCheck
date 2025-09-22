@@ -4,13 +4,12 @@
   height: 100vh;
   justify-content: center;
   align-items: center;
-  background: #fff;
+  background: #fff8ef;
 }
 
 .center {
   text-align: center;
 }
-
 
 /* container for buttons */
 .actions {
@@ -30,16 +29,16 @@
   text-align: center;
   text-decoration: none;
   transition: all 0.2s ease-in-out;
-  border: 1px solid #000;     /* black border */
-  background-color: #fff;     /* white background */
-  color: #000;                /* black text */
+  border: 1px solid #000; /* black border */
+  background-color: #fff; /* white background */
+  color: #000; /* black text */
   cursor: pointer;
 }
 
 /* hover effect */
 .btn:hover {
-  background-color: #000;     /* black background */
-  color: #fff;                /* white text */
+  background-color: #000; /* black background */
+  color: #fff; /* white text */
 }
 
 /* outline button is the same as base */
