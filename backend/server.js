@@ -1,4 +1,6 @@
 // backend/server.js
+
+/*
 const express = require('express');
 const cors = require('cors');
 const db = require('./db'); // <-- your pg Client
@@ -31,4 +33,4 @@ app.get('/api/users', async (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 API listening on http://localhost:${PORT}`);
-});
+});*/
