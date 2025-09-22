@@ -1,4 +1,5 @@
 // backend/server.js
+// no longer in use, prolly gonna delete it later
 
 /*
 const express = require('express');
