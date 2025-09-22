@@ -1,1 +1,52 @@
-<p>login works!</p>
+<div class="split">
+  <section class="half text-side">
+    <div class="copy">
+      <h2>Welcome back</h2>
+      <p>
+        Log in to continue exploring VibeCheck.<br />
+        Your dashboard is waiting.
+      </p>
+    </div>
+  </section>
+
+  <section class="half form-side">
+    <div class="card">
+      <img src="assets/vibechecklogo.png" alt="VibeCheck logo" class="logo" />
+
+      <h1 class="title">Log in</h1>
+
+      <form (ngSubmit)="onLogin()" novalidate>
+        <div class="field">
+          <label for="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            [(ngModel)]="email"
+            required
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            [(ngModel)]="password"
+            required
+            placeholder="••••••••"
+          />
+        </div>
+
+        <button type="submit">Log in</button>
+      </form>
+
+      <p class="meta">
+        Don’t have an account?
+        <a routerLink="/signup">Sign up</a>
+      </p>
+    </div>
+  </section>
+</div>
