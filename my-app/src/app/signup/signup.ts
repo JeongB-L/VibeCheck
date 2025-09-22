@@ -7,15 +7,30 @@ import { RouterModule } from '@angular/router';
   imports: [FormsModule, RouterModule],
   standalone: true,
   templateUrl: './signup.html',
-  styleUrl: './signup.css'
+  styleUrl: './signup.css',
 })
 export class Signup {
-  
   email: string = '';
   password: string = '';
 
-  onSignup() {
-    alert(`Signing up with\nEmail: ${this.email}\nPassword: ${this.password}`);
-  }
+  async onSignup() {
+    try {
+      const res = await fetch('http://localhost:3001/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: this.email }),
+      });
 
+      const body = await res.json();
+
+      if (!res.ok) {
+        alert(`Signup failed: ${body.error ?? 'Unknown error'}`);
+        return;
+      }
+
+      alert(`Saved: ${body.user.email}`);
+    } catch (err: any) {
+      alert(`Network error: ${err?.message ?? err}`);
+    }
+  }
 }
