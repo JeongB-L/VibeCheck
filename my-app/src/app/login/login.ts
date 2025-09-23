@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { ToastrService } from 'ngx-toastr';
 
 @Component({
   selector: 'app-login',
@@ -12,7 +13,7 @@ import { Router, RouterModule } from '@angular/router';
 export class Login {
   email = '';
   password = '';
-  constructor(private router: Router) {}
+  constructor(private router: Router, private toastr: ToastrService) {}
 
   async onLogin() {
     try {
@@ -28,14 +29,22 @@ export class Login {
       const body = await res.json();
 
       if (!res.ok) {
-        alert(body.error ?? 'Login failed');
+        if (body?.code === 'NOT_VERIFIED') {
+          this.toastr.info('Please verify your email to continue.', 'Check your inbox');
+          // prefill the verify page with the email we just used
+          this.router.navigate(['/verify'], {
+            queryParams: { email: body?.user?.email ?? this.email.trim().toLowerCase() },
+          });
+        } else {
+          this.toastr.error(body?.error ?? 'Login failed', 'Error');
+        }
         return;
       }
 
       // alert(`Welcome, ${body.user.email}!`);
       await this.router.navigate(['/homepage']);
     } catch (err: any) {
-      alert(`Network error: ${err?.message ?? err}`);
+      this.toastr.error(err?.message ?? String(err), 'Network error');
     }
   }
 }

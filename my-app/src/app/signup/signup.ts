@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { Router } from '@angular/router';
+import { ToastrService } from 'ngx-toastr';
 
 @Component({
   selector: 'app-signup',
@@ -10,15 +11,18 @@ import { Router } from '@angular/router';
   templateUrl: './signup.html',
   styleUrl: './signup.css',
 })
+
 export class Signup {
   email: string = '';
   password: string = '';
   loading = false;
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private toastr: ToastrService) {}
 
   async onSignup() {
+    if (this.loading) return;
     this.loading = true;
+
     try {
       const res = await fetch('http://localhost:3001/api/signup', {
         method: 'POST',
@@ -32,18 +36,25 @@ export class Signup {
       const body = await res.json();
 
       if (!res.ok) {
-        alert(`Signup failed: ${body.error ?? 'Unknown error'}`);
+        // Common special-cases from your backend
+        if (body?.code === 'EXISTS_VERIFIED') {
+          this.toastr.warning('Email already exists. Please log in.', 'Already verified');
+        } else {
+          this.toastr.error(body?.error ?? 'Unknown error', 'Sign up failed');
+        }
         return;
       }
 
-      // Redirect to /verify with the email
+      this.toastr.info('We sent you a new verification code.', 'Check your email');
+
       this.router.navigate(['/verify'], {
         queryParams: { email: body.user?.email ?? this.email.trim().toLowerCase() },
       });
     } catch (err: any) {
-      alert(`Network error: ${err?.message ?? err}`);
+      this.toastr.error(err?.message ?? String(err), 'Network error');
     } finally {
       this.loading = false;
     }
   }
+
 }

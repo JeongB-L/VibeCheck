@@ -20,6 +20,16 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({ origin: ["http://localhost:4200", "http://127.0.0.1:4200"] }));
 app.use(express.json());
 
+function passwordPolicyError(pw: string | undefined): string | null {
+  if (!pw || pw.trim().length === 0) return 'Password cannot be empty';
+ // if (pw.length < 8) return 'Password must be at least 8 characters';
+  //if (!/[A-Z]/.test(pw)) return 'Password must include an uppercase letter';
+ // if (!/[a-z]/.test(pw)) return 'Password must include a lowercase letter';
+ // if (!/[0-9]/.test(pw)) return 'Password must include a number';
+  return null;
+}
+
+
 // (Optional) PG pool for your /api/test-db and /api/setup endpoints.
 // If you don't need raw SQL, you can delete pool + those routes.
 const pool = process.env.SUPABASE_CONNECTION_STRING
@@ -183,8 +193,14 @@ app.post("/api/signup", async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
-    if (!password) {
+
+    if (typeof password !== "string") {
       return res.status(400).json({ error: "Password cant be empty" });
+    }
+    
+    const pwErr = passwordPolicyError(password);
+    if (pwErr) {
+      return res.status(400).json({ error: pwErr });
     }
 
     // Does a user already exist?
@@ -346,15 +362,26 @@ app.post("/api/login", async (req, res) => {
     }
 
     const bcrypt = require("bcryptjs");
+    //normal
+    const normalized = email.trim().toLowerCase();
 
     const { data: user, error } = await supabaseClient
       .from("users")
-      .select("user_id, email, password_hash")
-      .eq("email", email)
+      .select("user_id, email, password_hash, email_verified")
+      .eq("email", normalized)
       .single();
 
     if (error || !user || !user.password_hash) {
       return res.status(401).json({ error: "Invalid email or password" });
+    }
+    
+    //checker
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error: "Please verify your email before logging in.",
+        code: "NOT_VERIFIED",
+        user: { email: user.email }, // helpful for client to prefill /verify
+    });
     }
 
     const ok = await bcrypt.compare(password, user.password_hash);
