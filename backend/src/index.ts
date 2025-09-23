@@ -5,6 +5,7 @@ import path from "path";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
+import { generate_random_password } from "./utils/random_password_generator";
 import { sendVerificationEmail } from "./utils/emails";
 
 // IMPORTANT: import with an alias to avoid any name collisions
@@ -104,7 +105,67 @@ app.post("/api/setup", async (_req, res) => {
 app.post("/api/reset_password", async (req, res) => {
   try {
     console.log("Reset password request body:", req.body);
-    //
+
+    // Extract email from request body
+    const { email } = req.body as { email?: string };
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+
+    // Check if user with the provided email exists
+    const { data: user, error: findErr } = await supabaseClient
+      .from("users")
+      .select("user_id, email") // only need user_id and email here
+      .eq("email", email)
+      .maybeSingle();
+
+    if (findErr) {
+      console.error("Find user error:", findErr);
+      return res.status(500).json({ error: findErr.message });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: "No user found with this email" });
+    }
+
+    // Generate random password
+    const newPassword = generate_random_password(12);
+    console.log(`Generated password for ${email}: ${newPassword}`);
+
+    // Hash the new password
+    const password_hash = await bcrypt.hash(newPassword, 10);
+
+    // Update user's password in the database
+    const { error: updErr } = await supabaseClient
+      .from("users")
+      .update({ password_hash })
+      .eq("user_id", user.user_id);
+
+    if (updErr) {
+      console.error("Update password error:", updErr);
+      return res.status(500).json({ error: updErr.message });
+    }
+    console.log(`Password updated for user ${email} with ${password_hash}`);
+
+    // Send email with the new password
+    try {
+      await sendVerificationEmail({
+        to: email,
+        subject: "Your Password Has Been Reset",
+        name: email.split("@")[0] ?? "there",
+        verificationUrl: `http://localhost:4200/login`,
+        token: newPassword, // Using the token field to send the new password
+      });
+      console.log(`Reset email sent to ${email}`);
+    } catch (mailErr: any) {
+      console.error("Email send failed:", mailErr?.message || mailErr);
+      return res.status(500).json({ error: "Failed to send reset email" });
+    }
+
+    return res.status(200).json({
+      message:
+        "Password reset successfully. Check your email for the new password.",
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
