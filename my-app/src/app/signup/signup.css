@@ -116,3 +116,9 @@ button[type='submit']:hover {
   height: 10rem;
   margin: 0 auto 1.25rem;
 }
+
+.hint {
+  font-size: 0.75rem;
+  color: #6b7280; /* Tailwind gray-500 */
+  margin-top: 0.25rem;
+}
