@@ -103,7 +103,7 @@ app.post("/api/setup", async (_req, res) => {
 // ---- SIGNUP ----
 app.post("/api/signup", async (req, res) => {
   try {
-    const { email } = req.body as { email?: string };
+    const { email, password } = req.body as { email?: string; password?: string };
     console.log("📥 /api/signup body:", req.body);
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -111,9 +111,16 @@ app.post("/api/signup", async (req, res) => {
       return res.status(400).json({ error: "Valid email is required" });
     }
 
+    if (!password) {
+      return res.status(400).json({ error: "Password cant be empty" });
+    }
+
+    const bcrypt = require("bcryptjs");
+    const password_hash = await bcrypt.hash(password, 10);
+
     const { data, error } = await supabaseClient
       .from("users") // public.users (your table)
-      .insert([{ email }]) // user_id auto, created_at default
+      .insert([{ email, password_hash }]) // user_id auto, created_at default
       .select()
       .single();
 
@@ -133,6 +140,37 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
+// ---- LOGIN ----
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const bcrypt = require("bcryptjs");
+
+    const { data: user, error } = await supabaseClient
+      .from("users")
+      .select("user_id, email, password_hash")
+      .eq("email", email)
+      .single();
+
+    if (error || !user || !user.password_hash) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    return res.status(200).json({ user: { user_id: user.user_id, email: user.email } });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
   console.log(`🚀 Server: http://localhost:${PORT}`);
