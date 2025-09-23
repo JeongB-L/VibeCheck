@@ -18,7 +18,10 @@ export class Signup {
       const res = await fetch('http://localhost:3001/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: this.email }),
+        body: JSON.stringify({
+          email: this.email.trim().toLowerCase(),
+          password: this.password
+        }),
       });
 
       const body = await res.json();

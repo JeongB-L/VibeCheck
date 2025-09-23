@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { Landing } from './landing/landing'
 import { Signup } from './signup/signup' 
 import { Login } from './login/login' 
+import { Homeapge } from './homeapge/homeapge';
 
 export const routes: Routes = [
     {
@@ -17,6 +18,10 @@ export const routes: Routes = [
     {
         path:'signup',
         component: Signup,
+    },
+    {
+        path: 'homeapge',     
+        component: Homeapge,
     }
 
 
