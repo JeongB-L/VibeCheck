@@ -101,6 +101,15 @@ app.post("/api/setup", async (_req, res) => {
   }
 });
 
+app.post("/api/reset_password", async (req, res) => {
+  try {
+    console.log("Reset password request body:", req.body);
+    //
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
 app.post("/api/signup", async (req, res) => {
   try {
     const { email, password } = req.body as {
