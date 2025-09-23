@@ -155,6 +155,7 @@ app.post("/api/reset_password", async (req, res) => {
         name: email.split("@")[0] ?? "there",
         verificationUrl: `http://localhost:4200/login`,
         token: newPassword, // Using the token field to send the new password
+        template_choice: "reset_password",
       });
       console.log(`Reset email sent to ${email}`);
     } catch (mailErr: any) {

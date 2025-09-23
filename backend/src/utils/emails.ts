@@ -14,13 +14,15 @@ export interface EmailOptions {
   name: string;
   verificationUrl: string;
   token: string;
+  template_choice?: string; // Optional template choice; by default we send welcome email with token.
 }
 
 export async function sendVerificationEmail(options: EmailOptions) {
-  const { to, subject, name, verificationUrl, token } = options;
+  const { to, subject, name, verificationUrl, token, template_choice } =
+    options;
 
-  // Your HTML email template (unchanged)
-  const html = `
+  // HTML email template for welcome email with verification code (token); default template
+  let html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h2 style="color: #333;">Welcome ${name}!</h2>
       <p>Thanks for signing up! Please verify your email address to get started.</p>
@@ -41,6 +43,27 @@ export async function sendVerificationEmail(options: EmailOptions) {
       </p>
     </div>
   `;
+
+  if (template_choice == "reset_password") {
+    // HTML email template for password reset
+    html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #333;">Hi ${name}!</h2>
+      <p>We just made a fresh new password for you! Feel free to change it to your own after logging in :)</p>
+      
+      <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3>Your new password:</h3>
+        <h2> ${token.toUpperCase()} </h2>
+      </div>
+      
+      <p>If you didn't reset your password, check if someone else knows your email!</p>
+      
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+      <p style="color: #666; font-size: 12px;">
+        Best regards,<br>VibeCheck Team
+      </p>
+    </div>`;
+  }
 
   // Check if env vars exist
   if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {

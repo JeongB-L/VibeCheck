@@ -1,17 +1,18 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { ToastrModule, ToastrService } from 'ngx-toastr';
 
 @Component({
   selector: 'app-reset-password',
-  imports: [FormsModule, RouterModule],
+  imports: [FormsModule, RouterModule, ToastrModule],
   standalone: true,
   templateUrl: './reset_password.html',
   styleUrl: './reset_password.css',
 })
 export class ResetPassword {
   email: string = '';
-  constructor(private router: Router) {}
+  constructor(private router: Router, private toastr: ToastrService) {}
 
   async onResetPassword() {
     try {
@@ -27,13 +28,15 @@ export class ResetPassword {
       const body = await res.json();
 
       if (!res.ok) {
-        alert(`Password reset failed: ${body.error ?? 'Unknown error'}`);
+        this.toastr.error(`Password reset failed: ${body.error ?? 'Unknown error'}`, 'Error');
         return;
       }
 
+      this.toastr.success('Password reset! Check your email for the new password.', 'Success');
+
       await this.router.navigate(['/login']);
     } catch (err: any) {
-      alert(`Network error: ${err?.message ?? err}`);
+      this.toastr.error(`Network error: ${err?.message ?? err}`, 'Error');
     }
   }
 }
