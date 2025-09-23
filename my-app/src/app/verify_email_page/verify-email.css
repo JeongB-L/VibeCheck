@@ -1,0 +1,121 @@
+/* base */
+:host {
+  display: block;
+  padding: 32px 16px;
+  background: #fff8ef;
+  color: #111;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+/* cards */
+.verify-card,
+.success-card {
+  max-width: 420px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+/* Headings & text */
+h1,
+h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.sub {
+  margin: 0 0 16px;
+  color: #6b7280;
+  font-size: 14px;
+}
+.label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+/* Inputs */
+.email-input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  outline: none;
+}
+.email-input:focus {
+  border-color: #111;
+}
+
+/* OTP */
+.otp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 18px;
+}
+.otp input {
+  width: 42px;
+  height: 48px;
+  text-align: center;
+  font-size: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  outline: none;
+}
+.otp input:focus {
+  border-color: #111;
+}
+.otp .dash {
+  color: #9ca3af;
+}
+
+/* Button */
+.btn {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #111;
+  border-radius: 6px;
+  background: #111;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Success view */
+.success-wrap {
+  max-width: 420px;
+  margin: 0 auto;
+}
+.checkmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #22c55e;
+  border-radius: 50%;
+  color: #22c55e;
+  margin: 4px auto 10px;
+}
+.tick {
+  width: 20px;
+  height: 20px;
+}
+
+/* Messages */
+.msg.error {
+  margin-top: 10px;
+  color: #ff0000;
+}

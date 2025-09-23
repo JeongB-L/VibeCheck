@@ -7,7 +7,7 @@ import { Router, RouterModule } from '@angular/router';
   imports: [FormsModule, RouterModule],
   standalone: true,
   templateUrl: './login.html',
-  styleUrl: './login.css'
+  styleUrl: './login.css',
 })
 export class Login {
   email = '';
@@ -15,27 +15,27 @@ export class Login {
   constructor(private router: Router) {}
 
   async onLogin() {
-  try {
-    const res = await fetch('http://localhost:3001/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: this.email.trim().toLowerCase(),
-        password: this.password
-      }),
-    });
+    try {
+      const res = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: this.email.trim().toLowerCase(),
+          password: this.password,
+        }),
+      });
 
-    const body = await res.json();
+      const body = await res.json();
 
-    if (!res.ok) {
-      alert(body.error ?? 'Login failed');
-      return;
+      if (!res.ok) {
+        alert(body.error ?? 'Login failed');
+        return;
+      }
+
+      // alert(`Welcome, ${body.user.email}!`);
+      await this.router.navigate(['/homepage']);
+    } catch (err: any) {
+      alert(`Network error: ${err?.message ?? err}`);
     }
-
-    // alert(`Welcome, ${body.user.email}!`);
-    await this.router.navigate(['/homeapge']);
-  } catch (err: any) {
-    alert(`Network error: ${err?.message ?? err}`);
   }
-}
 }
