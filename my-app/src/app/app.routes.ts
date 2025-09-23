@@ -4,6 +4,7 @@ import { Signup } from './signup/signup';
 import { Login } from './login/login';
 import { Homepage } from './homepage/homepage';
 import { VerifyEmailComponent } from './verify_email_page/verify-email';
+import { ResetPassword } from './reset_password/reset_password';
 
 export const routes: Routes = [
   {
@@ -24,4 +25,8 @@ export const routes: Routes = [
     component: Homepage,
   },
   { path: 'verify', component: VerifyEmailComponent },
+  {
+    path: 'reset_password',
+    component: ResetPassword,
+  },
 ];
