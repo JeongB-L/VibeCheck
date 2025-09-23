@@ -300,6 +300,17 @@ app.post("/api/login", async (req, res) => {
 });
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
+  console.log("====================================");
+  console.log(`____   ____._____.          _________ .__                   __    
+\\   \\ /   /|__\\_ |__   ____ \\_   ___ \\|  |__   ____   ____ |  | __
+ \\   Y   / |  || __ \\_/ __ \\/    \\  \\/|  |  \\_/ __ \\_/ ___\\|  |/ /
+  \\     /  |  || \\_\\ \\  ___/\\     \\___|   Y  \\  ___/\\  \\___|    < 
+   \\___/   |__||___  /\\___  >\\______  /___|  /\\___  >\\___  >__|_ \\
+                   \\/     \\/        \\/     \\/     \\/     \\/     \\/`);
+  console.log("====================================");
+  console.log(
+    "\n\n Followings are simple endpoints for testing if the server is functional or not:\n"
+  );
   console.log(`🚀 Server: http://localhost:${PORT}`);
   console.log(`🔍 Test DB: http://localhost:${PORT}/api/test-db`);
   console.log(`🤖 Test Client: http://localhost:${PORT}/api/test-client`);
