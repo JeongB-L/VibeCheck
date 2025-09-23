@@ -45,7 +45,7 @@ export async function sendVerificationEmail(options: EmailOptions) {
   // Check if env vars exist
   if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
     throw new Error(
-      "❌ GMAIL_USER or GMAIL_PASS not found! Check your .env file."
+      "GMAIL_USER or GMAIL_PASS not found! Check your .env file."
     );
   }
 
@@ -65,33 +65,10 @@ export async function sendVerificationEmail(options: EmailOptions) {
       subject,
       html,
     });
-    console.log(`✅ Email sent to ${to}`);
+    console.log(`Email sent to ${to}`);
     return true;
   } catch (error) {
-    console.error("❌ Email failed:", error);
+    console.error("Email failed:", error);
     return false;
   }
 }
-
-async function testEmail() {
-  console.log("Testing email send...");
-  const temp = {
-    to: "meetp1229@gmail.com", // Test with any email
-    subject: "Test Verification Email",
-    name: "Test User",
-    verificationUrl: "http://localhost:4200/",
-    token: "123456",
-  };
-  try {
-    const res = await sendVerificationEmail(temp);
-    if (res) {
-      console.log("✅ Test email sent successfully!");
-    } else {
-      console.log("❌ Test email failed to send");
-    }
-  } catch (error) {
-    console.error("💥 Test email failed:", error);
-  }
-}
-
-testEmail();

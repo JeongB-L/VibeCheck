@@ -1,0 +1,99 @@
+<!-- SUCCESS VIEW -->
+<div *ngIf="successView" class="success-wrap">
+  <div class="success-card">
+    <div class="checkmark">
+      <div class="circle"></div>
+      <svg viewBox="0 0 24 24" class="tick">
+        <path
+          d="M20 6L9 17l-5-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+    <h2>You're verified 🎉</h2>
+    <p class="sub">
+      Redirecting to login in <b>{{ countdown }}</b
+      >…
+    </p>
+    <button class="btn" (click)="goNow()">Go to login now</button>
+  </div>
+</div>
+
+<!-- FORM VIEW -->
+<div *ngIf="!successView" class="verify-card">
+  <h1>Verify your email</h1>
+  <p class="sub">Enter the 6-digit code we sent to your inbox.</p>
+
+  <label class="label">Email</label>
+  <input
+    [(ngModel)]="email"
+    type="email"
+    name="email"
+    class="email-input"
+    placeholder="you@example.com"
+    required
+  />
+
+  <label class="label" style="margin-top: 16px">Verification code</label>
+  <div class="otp" (paste)="onPaste($event)">
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(0, $event)"
+      (keydown)="onKeydown(0, $event)"
+    />
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(1, $event)"
+      (keydown)="onKeydown(1, $event)"
+    />
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(2, $event)"
+      (keydown)="onKeydown(2, $event)"
+    />
+    <span class="dash">—</span>
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(3, $event)"
+      (keydown)="onKeydown(3, $event)"
+    />
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(4, $event)"
+      (keydown)="onKeydown(4, $event)"
+    />
+    <input
+      #otpInput
+      maxlength="1"
+      inputmode="numeric"
+      pattern="\d*"
+      (input)="onInput(5, $event)"
+      (keydown)="onKeydown(5, $event)"
+    />
+  </div>
+
+  <button class="btn" [disabled]="loading" (click)="onVerify()">
+    {{ loading ? 'Verifying…' : 'Verify' }}
+  </button>
+
+  <p *ngIf="error" class="msg error">{{ error }}</p>
+</div>

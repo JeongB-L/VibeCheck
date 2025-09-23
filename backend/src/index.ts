@@ -3,6 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { Pool } from "pg";
+import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
+import { sendVerificationEmail } from "./utils/emails";
 
 // IMPORTANT: import with an alias to avoid any name collisions
 import { supabase as supabaseClient } from "./lib/supabase";
@@ -35,13 +38,11 @@ app.get("/api/health", (_req, res) => {
 // ---- Test DB (raw SQL via Pool) ----
 app.get("/api/test-db", async (_req, res) => {
   if (!pool)
-    return res
-      .status(500)
-      .json({
-        type: "DATABASE",
-        connected: false,
-        error: "No pool configured",
-      });
+    return res.status(500).json({
+      type: "DATABASE",
+      connected: false,
+      error: "No pool configured",
+    });
   try {
     const client = await pool.connect();
     const result = await client.query("SELECT NOW() as time");
@@ -100,42 +101,163 @@ app.post("/api/setup", async (_req, res) => {
   }
 });
 
-// ---- SIGNUP ----
 app.post("/api/signup", async (req, res) => {
   try {
-    const { email, password } = req.body as { email?: string; password?: string };
-    console.log("📥 /api/signup body:", req.body);
+    const { email, password } = req.body as {
+      email?: string;
+      password?: string;
+    };
+    const normalized = (email ?? "").trim().toLowerCase();
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      console.log("⛔ invalid email:", email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
-
     if (!password) {
       return res.status(400).json({ error: "Password cant be empty" });
     }
 
-    const bcrypt = require("bcryptjs");
-    const password_hash = await bcrypt.hash(password, 10);
+    // Does a user already exist?
+    const { data: existing, error: findErr } = await supabaseClient
+      .from("users")
+      .select("user_id, email, email_verified")
+      .eq("email", normalized)
+      .maybeSingle();
 
-    const { data, error } = await supabaseClient
-      .from("users") // public.users (your table)
-      .insert([{ email, password_hash }]) // user_id auto, created_at default
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ insert error:", error);
-      if ((error as any).code === "23505" || /duplicate/i.test(error.message)) {
-        return res.status(409).json({ error: "Email already exists" });
-      }
-      return res.status(500).json({ error: error.message });
+    if (findErr) {
+      console.error("Find user error:", findErr);
+      return res.status(500).json({ error: findErr.message });
     }
 
-    console.log("✅ inserted row:", data);
-    return res.status(201).json({ user: data });
+    // helper to create and send code
+    const sendCode = async (emailTo: string, userId?: string) => {
+      const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const tokenNum = Number(tokenStr);
+
+      if (userId) {
+        const { error: updErr } = await supabaseClient
+          .from("users")
+          .update({ verification_token: tokenNum })
+          .eq("user_id", userId);
+        if (updErr) throw updErr;
+      }
+
+      try {
+        await sendVerificationEmail({
+          to: emailTo,
+          subject: "Verify your email",
+          name: emailTo.split("@")[0] ?? "there",
+          verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(
+            emailTo
+          )}`,
+          token: tokenStr,
+        });
+      } catch (mailErr: any) {
+        console.error("Email send failed:", mailErr?.message || mailErr);
+      }
+    };
+
+    if (existing) {
+      // If already verified then tell them to log in
+      if (existing.email_verified) {
+        return res.status(409).json({
+          error: "Email already exists. Please log in.",
+          code: "EXISTS_VERIFIED",
+        });
+      }
+      // Exists but not verified then resend code, guide to /verify
+      await sendCode(normalized, existing.user_id);
+      return res.status(200).json({
+        message: "Account exists but is not verified. We sent you a new code.",
+        code: "RESENT_CODE",
+        user: { email: normalized },
+      });
+    }
+
+    // New user then create row and send code
+    const password_hash = await bcrypt.hash(password, 10);
+    const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const tokenNum = Number(tokenStr);
+
+    const { data: created, error: insErr } = await supabaseClient
+      .from("users")
+      .insert([
+        { email: normalized, password_hash, verification_token: tokenNum },
+      ])
+      .select("user_id, email")
+      .single();
+
+    if (insErr) {
+      console.error("Insert error:", insErr);
+      return res.status(500).json({ error: insErr.message });
+    }
+
+    try {
+      await sendVerificationEmail({
+        to: normalized,
+        subject: "Verify your email",
+        name: normalized.split("@")[0] ?? "there",
+        verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(
+          normalized
+        )}`,
+        token: tokenStr,
+      });
+    } catch {}
+
+    return res.status(201).json({ user: created });
   } catch (e: any) {
-    console.error("💥 signup handler failed:", e);
+    console.error("signup failed:", e);
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+app.post("/api/verify-email", async (req, res) => {
+  try {
+    const { email, code } = req.body as {
+      email?: string;
+      code?: string | number;
+    };
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+    const codeStr = String(code ?? "").trim();
+    if (!/^\d{6}$/.test(codeStr)) {
+      return res.status(400).json({ error: "Code must be 6 digits" });
+    }
+
+    // fetch user
+    const { data: user, error: findErr } = await supabaseClient
+      .from("users")
+      .select("user_id, email, verification_token, email_verified")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.email_verified) {
+      return res.status(200).json({ ok: true, alreadyVerified: true });
+    }
+    if (user.verification_token == null) {
+      return res.status(400).json({ error: "No verification code on file" });
+    }
+
+    // compare
+    if (Number(codeStr) !== Number(user.verification_token)) {
+      return res.status(401).json({ error: "Invalid code" });
+    }
+
+    // mark verified and clear token
+    const { data: updated, error: updErr } = await supabaseClient
+      .from("users")
+      .update({ email_verified: true, verification_token: null })
+      .eq("user_id", user.user_id)
+      .select("user_id, email, email_verified")
+      .single();
+
+    if (updErr) return res.status(500).json({ error: updErr.message });
+
+    return res.status(200).json({ ok: true, user: updated });
+  } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
@@ -143,7 +265,10 @@ app.post("/api/signup", async (req, res) => {
 // ---- LOGIN ----
 app.post("/api/login", async (req, res) => {
   try {
-    const { email, password } = req.body as { email?: string; password?: string };
+    const { email, password } = req.body as {
+      email?: string;
+      password?: string;
+    };
 
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
@@ -166,7 +291,9 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    return res.status(200).json({ user: { user_id: user.user_id, email: user.email } });
+    return res
+      .status(200)
+      .json({ user: { user_id: user.user_id, email: user.email } });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
