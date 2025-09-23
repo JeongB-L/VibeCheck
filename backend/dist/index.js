@@ -6,76 +6,62 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const pg_1 = require("pg");
-const supabase_js_1 = require("@supabase/supabase-js"); // Add SupabaseClient type import
-dotenv_1.default.config();
+// IMPORTANT: import with an alias to avoid any name collisions
+const supabase_1 = require("./lib/supabase");
+dotenv_1.default.config({ path: path_1.default.join(__dirname, "../../.env") });
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
-// Debug: Check environment variables
-console.log("🔍 Environment check:");
-console.log("SUPABASE_CONNECTION_STRING:", !!process.env.SUPABASE_CONNECTION_STRING);
-console.log("SUPABASE_PROJECT_URL:", !!process.env.SUPABASE_PROJECT_URL);
-console.log("SUPABASE_KEY:", !!process.env.SUPABASE_KEY);
-// Middleware
-app.use((0, cors_1.default)({ origin: "http://localhost:4200" }));
+// CORS + JSON
+app.use((0, cors_1.default)({ origin: ["http://localhost:4200", "http://127.0.0.1:4200"] }));
 app.use(express_1.default.json());
-// PostgreSQL connection (Supabase)
-const pool = new pg_1.Pool({
-    connectionString: process.env.SUPABASE_CONNECTION_STRING,
+// (Optional) PG pool for your /api/test-db and /api/setup endpoints.
+// If you don't need raw SQL, you can delete pool + those routes.
+const pool = process.env.SUPABASE_CONNECTION_STRING
+    ? new pg_1.Pool({ connectionString: process.env.SUPABASE_CONNECTION_STRING })
+    : undefined;
+// Simple request logger
+app.use((req, _res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
 });
-// Supabase client
-let supabase; // Explicit type: SupabaseClient or undefined
-try {
-    supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_PROJECT_URL, process.env.SUPABASE_KEY);
-    console.log("✅ Supabase client created");
-}
-catch (error) {
-    console.error("❌ Supabase client failed:", error);
-}
-// Test 1: Database connection (raw SQL)
-app.get("/api/test-db", async (req, res) => {
+app.get("/api/health", (_req, res) => {
+    res.json({ status: "OK" });
+});
+// ---- Test DB (raw SQL via Pool) ----
+app.get("/api/test-db", async (_req, res) => {
+    if (!pool)
+        return res
+            .status(500)
+            .json({
+            type: "DATABASE",
+            connected: false,
+            error: "No pool configured",
+        });
     try {
         const client = await pool.connect();
         const result = await client.query("SELECT NOW() as time");
         client.release();
-        res.json({
-            type: "DATABASE",
-            connected: true,
-            time: result.rows[0].time,
-        });
+        res.json({ type: "DATABASE", connected: true, time: result.rows[0].time });
     }
     catch (error) {
         console.error("Database error:", error);
-        res.status(500).json({
-            type: "DATABASE",
-            connected: false,
-            error: error.message,
-        });
+        res
+            .status(500)
+            .json({ type: "DATABASE", connected: false, error: error.message });
     }
 });
-// Test 2: Supabase client (fixed - no RPC call)
-app.get("/api/test-client", async (req, res) => {
+// ---- Test Supabase client (table may not exist; error is fine) ----
+app.get("/api/test-client", async (_req, res) => {
     try {
-        if (!supabase) {
-            throw new Error("Supabase client not initialized");
-        }
-        // Simple ping test first
-        const { data: pingData, error: pingError } = await supabase
-            .from("pg_tables")
-            .select("tablename")
-            .limit(1);
-        if (pingError && !pingError.message.includes("does not exist")) {
-            throw pingError;
-        }
-        // Try to query test_table (will fail if doesn't exist - that's okay)
-        const { data, error } = await supabase
+        const { data, error } = await supabase_1.supabase
             .from("test_table")
             .select("id, message")
             .limit(1);
         res.json({
             type: "CLIENT",
             connected: true,
-            pingWorked: !pingError,
             tableExists: !error,
             data: data || [],
             error: error ? error.message : null,
@@ -83,19 +69,17 @@ app.get("/api/test-client", async (req, res) => {
         });
     }
     catch (error) {
-        res.json({
-            type: "CLIENT",
-            connected: true,
-            error: error.message,
-            note: "Connection works, query failed",
-        });
+        res.json({ type: "CLIENT", connected: false, error: error.message });
     }
 });
-// Setup endpoint - Create test table using raw SQL
-app.post("/api/setup", async (req, res) => {
+// ---- Setup test table (raw SQL) ----
+app.post("/api/setup", async (_req, res) => {
+    if (!pool)
+        return res
+            .status(500)
+            .json({ success: false, error: "No pool configured" });
     try {
         const client = await pool.connect();
-        // Create test table
         await client.query(`
       CREATE TABLE IF NOT EXISTS test_table (
         id SERIAL PRIMARY KEY,
@@ -103,38 +87,44 @@ app.post("/api/setup", async (req, res) => {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-        // Insert test data
-        await client.query(`
-      INSERT INTO test_table (message) 
-      VALUES ('Hello from Supabase!') 
-      ON CONFLICT DO NOTHING
-    `);
+        await client.query(`INSERT INTO test_table (message) VALUES ('Hello from Supabase!') ON CONFLICT DO NOTHING`);
         client.release();
-        res.json({
-            success: true,
-            message: "Test table created and populated!",
-        });
+        res.json({ success: true, message: "Test table created and populated!" });
     }
     catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
-// Health check
-app.get("/api/health", (req, res) => {
-    res.json({
-        status: "OK",
-        message: "Server is running!",
-        env: {
-            hasConnectionString: !!process.env.SUPABASE_CONNECTION_STRING,
-            hasProjectUrl: !!process.env.SUPABASE_PROJECT_URL,
-            hasKey: !!process.env.SUPABASE_KEY,
-        },
-    });
+// ---- SIGNUP ----
+app.post("/api/signup", async (req, res) => {
+    try {
+        const { email } = req.body;
+        console.log("📥 /api/signup body:", req.body);
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            console.log("⛔ invalid email:", email);
+            return res.status(400).json({ error: "Valid email is required" });
+        }
+        const { data, error } = await supabase_1.supabase
+            .from("users") // public.users (your table)
+            .insert([{ email }]) // user_id auto, created_at default
+            .select()
+            .single();
+        if (error) {
+            console.error("❌ insert error:", error);
+            if (error.code === "23505" || /duplicate/i.test(error.message)) {
+                return res.status(409).json({ error: "Email already exists" });
+            }
+            return res.status(500).json({ error: error.message });
+        }
+        console.log("✅ inserted row:", data);
+        return res.status(201).json({ user: data });
+    }
+    catch (e) {
+        console.error("💥 signup handler failed:", e);
+        return res.status(500).json({ error: e?.message ?? "Server error" });
+    }
 });
-// Start server
+// ---- SINGLE app.listen ----
 app.listen(PORT, () => {
     console.log(`🚀 Server: http://localhost:${PORT}`);
     console.log(`🔍 Test DB: http://localhost:${PORT}/api/test-db`);

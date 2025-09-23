@@ -10,25 +10,4 @@ import { environment } from './environments/environment';
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
 })
-export class App implements OnInit {
-  protected readonly title = signal('my-apps');
-
-  constructor(private http: HttpClient) {}
-
-  ngOnInit(): void {
-    console.log('✅ App component loaded');
-    console.log('Title is:', this.title());
-
-    // 👉 Test DB connection using environment config
-    const apiBaseUrl = `${environment.apiUrl}/api/test-db`;
-
-    this.http.get<{ connected: boolean; time: string }>(apiBaseUrl).subscribe({
-      next: (res) => {
-        console.log('🗄️ DB check:', res);
-      },
-      error: (err) => {
-        console.error('❌ Error calling DB check:', err);
-      },
-    });
-  }
-}
+export class App {}

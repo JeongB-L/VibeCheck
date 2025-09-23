@@ -13,3 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+
+
+
+
