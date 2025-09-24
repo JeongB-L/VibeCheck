@@ -182,26 +182,59 @@ app.post("/api/reset_password", async (req, res) => {
 
 app.post("/api/signup", async (req, res) => {
   try {
-    const { email, password } = req.body as {
-      email?: string;
-      password?: string;
-    };
+    const { email, password, first_name, last_name, date_of_birth, gender } =
+      req.body as {
+        email?: string;
+        password?: string;
+        first_name?: string;
+        last_name?: string;
+        date_of_birth?: string;
+        gender?: string | null;
+      };
+
     const normalized = (email ?? "").trim().toLowerCase();
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
 
-    if (typeof password !== "string") {
+    if (typeof password !== "string" || password.trim().length === 0) {
       return res.status(400).json({ error: "Password cant be empty" });
     }
 
-    const pwErr = passwordPolicyError(password);
-    if (pwErr) {
-      return res.status(400).json({ error: pwErr });
+    // simple field checks
+    const fn = (first_name ?? "").trim();
+    const ln = (last_name ?? "").trim();
+    if (!fn || !ln) {
+      return res
+        .status(400)
+        .json({ error: "First and last name are required" });
     }
 
-    // Does a user already exist?
+    let dob: string | null = null;
+    if (date_of_birth) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date_of_birth)) {
+        return res
+          .status(400)
+          .json({ error: "date_of_birth must be in proper form" });
+      }
+      dob = date_of_birth;
+    }
+
+    // normalize gender to a short label or null
+    const allowed = new Set([
+      "male",
+      "female",
+      "non-binary",
+      "nonbinary",
+      "other",
+      "",
+    ]);
+    let g: string | null = gender?.toString().trim().toLowerCase() ?? null;
+    if (g && !allowed.has(g)) g = "other";
+    if (g === "") g = null;
+
+    // does a user already exist?
     const { data: existing, error: findErr } = await supabaseClient
       .from("users")
       .select("user_id, email, email_verified")
@@ -214,10 +247,10 @@ app.post("/api/signup", async (req, res) => {
     }
 
     // helper to create and send code
-    const sendCode = async (emailTo: string, userId?: string) => {
-      const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
-      const tokenNum = Number(tokenStr);
+    const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const tokenNum = Number(tokenStr);
 
+    const sendCode = async (emailTo: string, userId?: string) => {
       if (userId) {
         const { error: updErr } = await supabaseClient
           .from("users")
@@ -225,12 +258,11 @@ app.post("/api/signup", async (req, res) => {
           .eq("user_id", userId);
         if (updErr) throw updErr;
       }
-
       try {
         await sendVerificationEmail({
           to: emailTo,
           subject: "Verify your email",
-          name: emailTo.split("@")[0] ?? "there",
+          name: fn || emailTo.split("@")[0] || "there",
           verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(
             emailTo
           )}`,
@@ -242,31 +274,57 @@ app.post("/api/signup", async (req, res) => {
     };
 
     if (existing) {
-      // If already verified then tell them to log in
+      // already verified → tell them to log in
       if (existing.email_verified) {
         return res.status(409).json({
           error: "Email already exists. Please log in.",
           code: "EXISTS_VERIFIED",
         });
       }
-      // Exists but not verified then resend code, guide to /verify
-      await sendCode(normalized, existing.user_id);
+
+      // exists but not verified → update profile fields + new code
+      const { error: updErr2, data: updatedUser } = await supabaseClient
+        .from("users")
+        .update({
+          first_name: fn,
+          last_name: ln,
+          date_of_birth: dob,
+          gender: g,
+          verification_token: tokenNum,
+        })
+        .eq("user_id", existing.user_id)
+        .select("user_id, email")
+        .single();
+
+      if (updErr2) {
+        console.error("Update unverified user error:", updErr2);
+        return res.status(500).json({ error: updErr2.message });
+      }
+
+      await sendCode(normalized, undefined); // email only; token already saved
       return res.status(200).json({
-        message: "Account exists but is not verified. We sent you a new code.",
+        message:
+          "Account exists but is not verified. We updated your info and sent a new code.",
         code: "RESENT_CODE",
-        user: { email: normalized },
+        user: updatedUser,
       });
     }
 
-    // New user then create row and send code
+    // new user → create row with profile fields
     const password_hash = await bcrypt.hash(password, 10);
-    const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const tokenNum = Number(tokenStr);
 
     const { data: created, error: insErr } = await supabaseClient
       .from("users")
       .insert([
-        { email: normalized, password_hash, verification_token: tokenNum },
+        {
+          email: normalized,
+          password_hash,
+          verification_token: tokenNum,
+          first_name: fn,
+          last_name: ln,
+          date_of_birth: dob,
+          gender: g,
+        },
       ])
       .select("user_id, email")
       .single();
@@ -276,18 +334,7 @@ app.post("/api/signup", async (req, res) => {
       return res.status(500).json({ error: insErr.message });
     }
 
-    try {
-      await sendVerificationEmail({
-        to: normalized,
-        subject: "Verify your email",
-        name: normalized.split("@")[0] ?? "there",
-        verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(
-          normalized
-        )}`,
-        token: tokenStr,
-      });
-    } catch {}
-
+    await sendCode(normalized, undefined); // token already saved via insert
     return res.status(201).json({ user: created });
   } catch (e: any) {
     console.error("signup failed:", e);
