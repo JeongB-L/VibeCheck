@@ -10,7 +10,6 @@ router.post("/reset_password", async (req, res) => {
   try {
     const { email } = req.body as { email?: string };
     const normalized = (email ?? "").trim().toLowerCase();
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
@@ -35,18 +34,14 @@ router.post("/reset_password", async (req, res) => {
 
     if (updErr) return res.status(500).json({ error: updErr.message });
 
-    try {
-      await sendVerificationEmail({
-        to: normalized,
-        subject: "Your Password Has Been Reset",
-        name: normalized.split("@")[0] ?? "there",
-        verificationUrl: `http://localhost:4200/login`,
-        token: newPassword, // reusing "token" field as body content
-      });
-    } catch (mailErr: any) {
-      console.error("Email send failed:", mailErr?.message || mailErr);
-      return res.status(500).json({ error: "Failed to send reset email" });
-    }
+    await sendVerificationEmail({
+      to: normalized,
+      subject: "Your Password Has Been Reset",
+      name: normalized.split("@")[0] ?? "there",
+      verificationUrl: `http://localhost:4200/login`,
+      token: newPassword,
+      template_choice: "reset_password",
+    });
 
     return res.status(200).json({
       message:
