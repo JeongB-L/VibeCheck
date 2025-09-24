@@ -5,8 +5,8 @@ import { ToastrModule, ToastrService } from 'ngx-toastr';
 
 @Component({
   selector: 'app-reset-password',
-  imports: [FormsModule, RouterModule, ToastrModule],
   standalone: true,
+  imports: [FormsModule, RouterModule, ToastrModule], // friend added ToastrModule
   templateUrl: './reset_password.html',
   styleUrl: './reset_password.css',
 })
@@ -16,13 +16,10 @@ export class ResetPassword {
 
   async onResetPassword() {
     try {
-      console.log('Resetting password for email:', this.email);
       const res = await fetch('http://localhost:3001/api/reset_password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: this.email.trim().toLowerCase(),
-        }),
+        body: JSON.stringify({ email: this.email.trim().toLowerCase() }),
       });
 
       const body = await res.json();
@@ -33,7 +30,6 @@ export class ResetPassword {
       }
 
       this.toastr.success('Password reset! Check your email for the new password.', 'Success');
-
       await this.router.navigate(['/login']);
     } catch (err: any) {
       this.toastr.error(`Network error: ${err?.message ?? err}`, 'Error');
