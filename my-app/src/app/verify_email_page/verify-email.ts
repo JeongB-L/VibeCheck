@@ -31,9 +31,9 @@ export class VerifyEmailComponent implements OnInit {
     setTimeout(() => this.inputs?.first?.nativeElement?.focus(), 0);
   }
 
-  ngOnDestroy(): void {
-    if (this.t) clearInterval(this.t);
-  }
+  //ngOnDestroy(): void {
+  //if (this.t) clearInterval(this.t);
+  //}
 
   get code() {
     return this.codeDigits.join('');
@@ -107,5 +107,74 @@ export class VerifyEmailComponent implements OnInit {
   goNow() {
     if (this.t) clearInterval(this.t);
     this.router.navigateByUrl('/login');
+  }
+
+  // default state
+  resendLoading = false;
+  resendError = '';
+  resentMsg = '';
+  cooldown = 0;
+  private cooldownTimer?: any;
+
+  ngOnDestroy(): void {
+    if (this.cooldownTimer) clearInterval(this.cooldownTimer);
+  }
+
+  // put this helper in your component
+  private startCooldown(seconds: number) {
+    if (this.cooldownTimer) clearInterval(this.cooldownTimer);
+    this.cooldown = seconds;
+    this.cooldownTimer = setInterval(() => {
+      this.cooldown--;
+      if (this.cooldown <= 0 && this.cooldownTimer) {
+        clearInterval(this.cooldownTimer);
+      }
+    }, 1000);
+  }
+
+  async onResend() {
+    this.resendError = '';
+    this.resentMsg = '';
+
+    const email = this.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.resendError = 'Enter a valid email.';
+      return;
+    }
+
+    // ✅ don’t start cooldown here — just block if already cooling down
+    if (this.cooldown > 0 || this.resendLoading) return;
+
+    this.resendLoading = true;
+    try {
+      const res = await fetch(`${BACKEND}/api/resend-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const body = await res.json();
+
+      if (res.status === 404) {
+        this.resendError = 'No account found for this email.';
+        return;
+      }
+      if (res.status === 409) {
+        this.resentMsg = 'This email is already verified. Please log in.';
+        return;
+      }
+
+      if (!res.ok) {
+        this.resendError = body.error ?? 'Could not resend code.';
+        return;
+      }
+
+      // success — now start cooldown
+      this.resentMsg = 'A new code was sent to your email.';
+      this.startCooldown(60);
+    } catch (e: any) {
+      this.resendError = e?.message ?? 'Network error.';
+    } finally {
+      this.resendLoading = false;
+    }
   }
 }

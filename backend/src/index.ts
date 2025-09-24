@@ -21,14 +21,13 @@ app.use(cors({ origin: ["http://localhost:4200", "http://127.0.0.1:4200"] }));
 app.use(express.json());
 
 function passwordPolicyError(pw: string | undefined): string | null {
-  if (!pw || pw.trim().length === 0) return 'Password cannot be empty';
- // if (pw.length < 8) return 'Password must be at least 8 characters';
+  if (!pw || pw.trim().length === 0) return "Password cannot be empty";
+  // if (pw.length < 8) return 'Password must be at least 8 characters';
   //if (!/[A-Z]/.test(pw)) return 'Password must include an uppercase letter';
- // if (!/[a-z]/.test(pw)) return 'Password must include a lowercase letter';
- // if (!/[0-9]/.test(pw)) return 'Password must include a number';
+  // if (!/[a-z]/.test(pw)) return 'Password must include a lowercase letter';
+  // if (!/[0-9]/.test(pw)) return 'Password must include a number';
   return null;
 }
-
 
 // (Optional) PG pool for your /api/test-db and /api/setup endpoints.
 // If you don't need raw SQL, you can delete pool + those routes.
@@ -196,7 +195,7 @@ app.post("/api/signup", async (req, res) => {
     if (typeof password !== "string") {
       return res.status(400).json({ error: "Password cant be empty" });
     }
-    
+
     const pwErr = passwordPolicyError(password);
     if (pwErr) {
       return res.status(400).json({ error: pwErr });
@@ -348,6 +347,67 @@ app.post("/api/verify-email", async (req, res) => {
   }
 });
 
+app.post("/api/resend-code", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    const normalized = (email ?? "").trim().toLowerCase();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+
+    // find user
+    const { data: user, error: findErr } = await supabaseClient
+      .from("users")
+      .select("user_id, email, email_verified")
+      .eq("email", normalized)
+      .maybeSingle();
+
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!user)
+      return res
+        .status(404)
+        .json({ error: "No account found for this email." });
+    if (user.email_verified) {
+      return res
+        .status(409)
+        .json({ error: "Email already verified. Please log in." });
+    }
+
+    // new 6-digit code
+    const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const tokenNum = Number(tokenStr);
+
+    // update token
+    const { error: updErr } = await supabaseClient
+      .from("users")
+      .update({ verification_token: tokenNum })
+      .eq("user_id", user.user_id);
+
+    if (updErr) return res.status(500).json({ error: updErr.message });
+
+    // send email
+    try {
+      await sendVerificationEmail({
+        to: normalized,
+        subject: "Your new verification code",
+        name: normalized.split("@")[0] ?? "there",
+        verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(
+          normalized
+        )}`,
+        token: tokenStr,
+      });
+    } catch (mailErr: any) {
+      console.error("Email send failed:", mailErr?.message || mailErr);
+      return res.status(200).json({ ok: true, emailSent: false });
+    }
+
+    return res.status(200).json({ ok: true, emailSent: true });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
 // ---- LOGIN ----
 app.post("/api/login", async (req, res) => {
   try {
@@ -373,14 +433,14 @@ app.post("/api/login", async (req, res) => {
     if (error || !user || !user.password_hash) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    
+
     //checker
     if (!user.email_verified) {
       return res.status(403).json({
         error: "Please verify your email before logging in.",
         code: "NOT_VERIFIED",
         user: { email: user.email }, // helpful for client to prefill /verify
-    });
+      });
     }
 
     const ok = await bcrypt.compare(password, user.password_hash);
