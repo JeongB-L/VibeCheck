@@ -95,5 +95,25 @@
     {{ loading ? 'Verifying…' : 'Verify' }}
   </button>
 
+  <div class="resend">
+    <button
+      type="button"
+      class="link"
+      (click)="onResend()"
+      [disabled]="resendLoading || cooldown > 0"
+    >
+      {{
+        resendLoading
+          ? 'Sending…'
+          : cooldown > 0
+          ? 'Resend available in ' + cooldown + 's'
+          : "Didn't get a code? Resend"
+      }}
+    </button>
+
+    <p *ngIf="resentMsg" class="msg success">{{ resentMsg }}</p>
+    <p *ngIf="resendError" class="msg error">{{ resendError }}</p>
+  </div>
+
   <p *ngIf="error" class="msg error">{{ error }}</p>
 </div>

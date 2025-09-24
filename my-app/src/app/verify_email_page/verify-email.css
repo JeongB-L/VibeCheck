@@ -119,3 +119,25 @@ h2 {
   margin-top: 10px;
   color: #ff0000;
 }
+
+.resend {
+  margin-top: 12px;
+  text-align: center;
+}
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #111;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link:disabled {
+  color: #9ca3af;
+  cursor: default;
+  text-decoration: none;
+}
+.msg.success {
+  margin-top: 8px;
+  color: #15803d;
+} /* green */
