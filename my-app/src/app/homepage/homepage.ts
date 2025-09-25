@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 @Component({
   selector: 'app-homepage',
   imports: [],
+  standalone: true, 
   templateUrl: './homepage.html',
   styleUrl: './homepage.css',
 })
@@ -14,6 +15,10 @@ export class Homepage {
 
   goProfile() {
     this.router.navigate(['/settings/profile']); // adjust route if different
+  }
+
+  goMyOutings() {
+    this.router.navigate(['/my-outings']);
   }
 
   logout() {

@@ -6,6 +6,7 @@ import { Homepage } from './homepage/homepage';
 import { VerifyEmailComponent } from './verify_email_page/verify-email';
 import { ResetPassword } from './reset_password/reset_password';
 import { authGuard } from './auth.guard';
+import { Outings } from './outings/outings';
 
 export const routes: Routes = [
   {
@@ -36,4 +37,6 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
+  { path: 'my-outings',
+      component: Outings }
 ];
