@@ -1,0 +1,13 @@
+<header class="bar">
+  <button class="back" (click)="backHome()">← Home</button>
+  <h1>Profile</h1>
+  <span></span>
+</header>
+
+<section class="card">
+  <div class="avatar">{{ initial() }}</div>
+  <div class="info">
+    <div class="label">Signed in as</div>
+    <div class="email">{{ email() }}</div>
+  </div>
+</section>
