@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { supabase as supabaseClient } from "../lib/supabase";
+import jwt from "jsonwebtoken";
 
 const router = Router();
 
@@ -38,9 +39,16 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    // Generate a JWT token
+    const token = jwt.sign(
+      { user_id: user.user_id, email: user.email },
+      process.env.JWT_SECRET || "dev-secret",
+      { expiresIn: "1h" }
+    );
+
     return res
       .status(200)
-      .json({ user: { user_id: user.user_id, email: user.email } });
+      .json({ user: { user_id: user.user_id, email: user.email }, token, });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }

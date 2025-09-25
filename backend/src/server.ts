@@ -11,7 +11,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
 // Core middleware
-app.use(cors({ origin: ["http://localhost:4200", "http://127.0.0.1:4200"] }));
+app.use(cors({ origin: ["http://localhost:4200", "http://127.0.0.1:4200"], allowedHeaders: ["Content-Type", "Authorization"], }));
 app.use(express.json());
 
 // Simple request logger (optional, but handy)
