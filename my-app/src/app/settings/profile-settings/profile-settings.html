@@ -1,13 +1,25 @@
 <header class="bar">
-  <button class="back" (click)="backHome()">← Home</button>
+  <button class="back" (click)="backHome()">← Back</button>
   <h1>Profile</h1>
   <span></span>
 </header>
 
-<section class="card">
-  <div class="avatar">{{ initial() }}</div>
-  <div class="info">
+<section class="card profile-grid">
+  <div class="left">
+    <img *ngIf="avatarUrl; else placeholder" [src]="avatarUrl" class="avatar-img-lg" alt="Avatar" />
+    <ng-template #placeholder>
+      <div class="avatar-lg">{{ initial() }}</div>
+    </ng-template>
+
+    <input #fileInput type="file" accept="image/*" hidden (change)="onFileChange($event)" />
+    <button class="btn dark" (click)="openPicker(fileInput)">Change</button>
+  </div>
+
+  <!-- right side: Signed in as -->
+  <div class="right">
     <div class="label">Signed in as</div>
     <div class="email">{{ email() }}</div>
+    <div class="label">Description here...</div>
+    <div class="label">Please update UI so it has a Github type of view...</div>
   </div>
 </section>
