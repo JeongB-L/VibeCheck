@@ -2,8 +2,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff8ef;                
-  border-bottom: 1px solid #e5e7eb;  
+  background: #fff8ef;
+  border-bottom: 1px solid #e5e7eb;
   padding: 12px 24px;
   font-family: system-ui, sans-serif;
 }
@@ -22,11 +22,11 @@
 .app-name {
   font-weight: 700;
   font-size: 20px;
-  color: #111827; 
+  color: #111827;
 }
 
 .logout-btn {
-  background: #111827;     
+  background: #111827;
   color: #fff;
   border: none;
   padding: 8px 16px;
@@ -36,5 +36,40 @@
 }
 
 .logout-btn:hover {
-  background: #0b1220;    
+  background: #0b1220;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #111827;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.profile-btn:hover {
+  background: #0b1220;
+}
+
+.profile-btn .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
 }
