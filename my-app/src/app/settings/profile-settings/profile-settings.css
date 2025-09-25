@@ -1,0 +1,103 @@
+.bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff8ef;
+  font-family: system-ui, sans-serif;
+}
+
+.bar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.back {
+  justify-self: start;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.card {
+  max-width: 720px;
+  margin: 16px auto;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.left {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.avatar-img-lg {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+}
+
+.avatar-lg {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #111827;
+  color: #fff;
+  font-weight: 800;
+  font-size: 28px;
+}
+
+.btn.dark {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: #111827;
+  color: #fff;
+  font-weight: 600;
+  height: 36px;
+  cursor: pointer;
+}
+
+.btn.dark:hover {
+  background: #0b1220;
+}
+
+.right .label {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.right .email {
+  font-weight: 600;
+}
+
+.hint {
+  color: #6b7280;
+  margin-top: 8px;
+}

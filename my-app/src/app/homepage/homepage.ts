@@ -8,10 +8,15 @@ import { Router } from '@angular/router';
   styleUrl: './homepage.css',
 })
 export class Homepage {
+  userEmail = sessionStorage.getItem('userEmail') || '';
+
   constructor(private router: Router) {}
 
-  logout() {
+  goProfile() {
+    this.router.navigate(['/settings/profile']); // adjust route if different
+  }
 
+  logout() {
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('userEmail');
     this.router.navigate(['/login']);

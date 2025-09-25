@@ -4,6 +4,7 @@ import loginRouter from "./login";
 import verifyEmailRouter from "./verify-email";
 import resetCodeRouter from "./reset-code";
 import resetPasswordRouter from "./reset-password";
+import profileRouter from "./profile";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use(loginRouter); // POST /login
 router.use(verifyEmailRouter); // POST /verify-email
 router.use(resetCodeRouter); // POST /resend-code
 router.use(resetPasswordRouter); // POST /reset_password
+router.use(profileRouter); // GET /api/profile/me, PATCH /api/profile
 
 export default router;

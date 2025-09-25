@@ -24,12 +24,16 @@ export const routes: Routes = [
   {
     path: 'homepage',
     component: Homepage,
-    canActivate: [authGuard], 
-
+    canActivate: [authGuard],
   },
   { path: 'verify', component: VerifyEmailComponent },
   {
     path: 'reset_password',
     component: ResetPassword,
+  },
+  {
+    path: 'settings/profile',
+    loadComponent: () =>
+      import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
 ];
