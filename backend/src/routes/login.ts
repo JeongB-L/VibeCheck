@@ -1,7 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 import { supabase as supabaseClient } from "../lib/supabase";
 import jwt from "jsonwebtoken";
+import { sendVerificationEmail } from "../utils/emails";
 
 const router = Router();
 
@@ -18,7 +20,7 @@ router.post("/login", async (req, res) => {
     const normalized = email.trim().toLowerCase();
     const { data: user, error } = await supabaseClient
       .from("users")
-      .select("user_id, email, password_hash, email_verified")
+      .select("user_id, email, password_hash, email_verified, first_name")
       .eq("email", normalized)
       .single();
 
@@ -33,10 +35,38 @@ router.post("/login", async (req, res) => {
     }
 
     if (!user.email_verified) {
+
+      const tokenStr = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const tokenNum = Number(tokenStr);
+
+      // save the new token on the user
+      const { error: updErr } = await supabaseClient
+        .from("users")
+        .update({ verification_token: tokenNum })
+        .eq("user_id", user.user_id);
+
+
+      if (!updErr) {
+        // try to send the email (don’t fail login flow if mailer errors)
+        try {
+          await sendVerificationEmail({
+            to: user.email,
+            subject: "Verify your email",
+            name: user.first_name || user.email.split("@")[0] || "there",
+            verificationUrl: `http://localhost:4200/verify?email=${encodeURIComponent(user.email)}`,
+            token: tokenStr,
+          });
+        } catch (mailErr) {
+          console.error("Login auto-resend failed:", mailErr);
+        }
+      }
+      
+
       return res.status(403).json({
         error: "Please verify your email before logging in.",
         code: "NOT_VERIFIED",
         user: { email: user.email },
+        resent: true, //nicer toast
       });
     }
 
