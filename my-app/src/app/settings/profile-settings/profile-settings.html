@@ -4,22 +4,39 @@
   <span></span>
 </header>
 
-<section class="card profile-grid">
-  <div class="left">
-    <img *ngIf="avatarUrl; else placeholder" [src]="avatarUrl" class="avatar-img-lg" alt="Avatar" />
-    <ng-template #placeholder>
-      <div class="avatar-lg">{{ initial() }}</div>
-    </ng-template>
+<!-- Top: Signed in as -->
+<section class="card signed-as">
+  <div class="top-row">
+    <span class="muted">Signed in as</span>
+    <span class="name">{{ fullName() || initial() }}</span>
+  </div>
+  <div class="email-row">
+    <span class="email">{{ email() }}</span>
+  </div>
+</section>
+
+<!-- Bottom: Two columns -->
+<section class="card two-col">
+  <!-- Left: Avatar + Change -->
+  <div class="col left">
+    <div class="avatar-wrap">
+      <img *ngIf="avatarUrl; else placeholder" [src]="avatarUrl" class="avatar-xl" alt="Avatar" />
+      <ng-template #placeholder>
+        <div class="avatar-xl placeholder">{{ initial() }}</div>
+      </ng-template>
+    </div>
 
     <input #fileInput type="file" accept="image/*" hidden (change)="onFileChange($event)" />
-    <button class="btn dark" (click)="openPicker(fileInput)">Change</button>
+    <button class="btn dark full" (click)="openPicker(fileInput)">Change</button>
+    <small class="hint">PNG, JPG, or WEBP · Max 5 MB</small>
   </div>
 
-  <!-- right side: Signed in as -->
-  <div class="right">
-    <div class="label">Signed in as</div>
-    <div class="email">{{ email() }}</div>
-    <div class="label">Description here...</div>
-    <div class="label">Please update UI so it has a Github type of view...</div>
+  <!-- Right: Description -->
+  <div class="col right">
+    <h2>About</h2>
+    <p class="desc">BIO HERE (changable)</p>
+    <div class="desc-box">
+      <p>Nothing here yet. extra space for hobbies or something else</p>
+    </div>
   </div>
 </section>

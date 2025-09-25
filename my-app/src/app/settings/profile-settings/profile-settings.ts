@@ -13,10 +13,17 @@ const API = 'http://localhost:3001';
 })
 export class ProfileSettings implements OnInit {
   email = signal<string>(sessionStorage.getItem('userEmail') || '');
+  firstName = signal<string>('');
+  lastName = signal<string>('');
   avatarUrl: string | null = null;
   selected?: File;
 
   constructor(private router: Router) {}
+
+  fullName = computed(() => {
+    const parts = [this.firstName().trim(), this.lastName().trim()].filter(Boolean);
+    return parts.join(' ');
+  });
 
   initial = computed(() => {
     const e = this.email().trim();
@@ -33,6 +40,8 @@ export class ProfileSettings implements OnInit {
     const res = await fetch(`${API}/api/profile/me?email=${encodeURIComponent(this.email())}`);
     const body = await res.json();
     if (res.ok) this.avatarUrl = body?.profile?.avatar_url ?? null;
+    this.firstName.set(body?.first_name ?? '');
+    this.lastName.set(body?.last_name ?? '');
   }
 
   backHome() {

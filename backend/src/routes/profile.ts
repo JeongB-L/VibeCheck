@@ -31,7 +31,7 @@ router.get("/profile/me", async (req, res) => {
 
   const { data: user, error: uErr } = await db
     .from("users")
-    .select("user_id, email")
+    .select("user_id, email, first_name, last_name")
     .eq("email", email)
     .maybeSingle();
   if (uErr) return res.status(500).json({ error: uErr.message });
@@ -46,6 +46,8 @@ router.get("/profile/me", async (req, res) => {
 
   return res.json({
     email: user.email,
+    first_name: user.first_name ?? null,
+    last_name: user.last_name ?? null,
     profile: {
       ...profile,
       avatar_url: publicUrlFromPath(profile?.avatar_path),
