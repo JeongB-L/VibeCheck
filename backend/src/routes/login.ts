@@ -26,6 +26,12 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
     if (!user.email_verified) {
       return res.status(403).json({
         error: "Please verify your email before logging in.",
@@ -34,10 +40,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
 
     // Generate a JWT token
     const token = jwt.sign(
