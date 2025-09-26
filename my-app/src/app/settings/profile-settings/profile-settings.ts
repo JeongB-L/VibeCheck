@@ -19,6 +19,12 @@ export class ProfileSettings implements OnInit {
   avatarUrl: string | null = null;
   selected?: File;
 
+  about = signal<string>('');
+  editingBio = signal<boolean>(false);
+  tempBio = signal<string>('');
+  savingBio = signal<boolean>(false);
+  preferences = signal<string[]>([]);
+
   constructor(private router: Router, private toastr: ToastrService) {}
 
   fullName = computed(() => {
@@ -40,9 +46,18 @@ export class ProfileSettings implements OnInit {
   async loadMe() {
     const res = await fetch(`${API}/api/profile/me?email=${encodeURIComponent(this.email())}`);
     const body = await res.json();
-    if (res.ok) this.avatarUrl = body?.profile?.avatar_url ?? null;
-    this.firstName.set(body?.first_name ?? '');
-    this.lastName.set(body?.last_name ?? '');
+
+    if (res.ok) {
+      this.avatarUrl = body?.profile?.avatar_url ?? null;
+      this.firstName.set(body?.first_name ?? '');
+      this.lastName.set(body?.last_name ?? '');
+      this.about.set(body?.profile?.bio ?? '');
+
+      const prefs = body?.profile?.preferences ?? body?.preferences ?? [];
+      if (Array.isArray(prefs)) {
+        this.preferences.set(prefs.filter((x: any) => typeof x === 'string'));
+      }
+    }
   }
 
   backHome() {
@@ -88,6 +103,87 @@ export class ProfileSettings implements OnInit {
 
       this.avatarUrl = body.avatar_url ?? null;
       this.toastr.success('Profile picture updated.', 'Success');
+    } catch (e: any) {
+      this.toastr.error(e?.message ?? 'Network error', 'Error');
+    }
+  }
+
+  startEditBio() {
+    this.tempBio.set(this.about());
+    this.editingBio.set(true);
+  }
+
+  cancelEditBio() {
+    this.editingBio.set(false);
+    this.tempBio.set(this.about());
+  }
+
+  async saveBio() {
+    const bio = this.tempBio().trim();
+    this.savingBio.set(true);
+    try {
+      const res = await fetch(`${API}/api/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: this.email(),
+          bio,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        this.toastr.error(body?.error ?? 'Could not save bio', 'Error');
+        return;
+      }
+
+      this.about.set(bio);
+      this.editingBio.set(false);
+      this.toastr.success('Bio updated.', 'Success');
+    } catch (e: any) {
+      this.toastr.error(e?.message ?? 'Network error', 'Error');
+    } finally {
+      this.savingBio.set(false);
+    }
+  }
+
+  // --- Preferences logic ---
+  addPref(raw: string) {
+    const v = (raw || '').trim();
+    if (!v) return;
+    const current = this.preferences();
+    if (current.some((p) => p.toLowerCase() === v.toLowerCase())) {
+      this.toastr.info('Already added.', 'Preference');
+      return;
+    }
+    this.preferences.set([...current, v]);
+  }
+
+  removePref(i: number) {
+    const arr = this.preferences().slice();
+    if (i >= 0 && i < arr.length) {
+      arr.splice(i, 1);
+      this.preferences.set(arr);
+    }
+  }
+
+  async savePrefs() {
+    try {
+      const res = await fetch(`${API}/api/profile/preferences`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: this.email(),
+          preferences: this.preferences(),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        this.toastr.error(body?.error ?? 'Could not save preferences', 'Error');
+        return;
+      }
+      this.toastr.success('Preferences saved.', 'Success');
     } catch (e: any) {
       this.toastr.error(e?.message ?? 'Network error', 'Error');
     }
