@@ -39,18 +39,36 @@ router.get("/profile/me", async (req, res) => {
 
   const { data: profile, error: pErr } = await db
     .from("profiles")
-    .select("display_name, username, bio, avatar_path, updated_at")
+    .select("display_name, username, bio, avatar_path, preferences, updated_at")
     .eq("user_id", user.user_id)
     .maybeSingle();
   if (pErr) return res.status(500).json({ error: pErr.message });
+
+  // Normalize preferences: return an array to the client
+  let prefsArr: string[] = [];
+  const raw = profile?.preferences;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    try {
+      prefsArr = JSON.parse(raw);
+    } catch {
+      prefsArr = [];
+    }
+  } else if (Array.isArray(raw)) {
+    prefsArr = raw.filter((x: any) => typeof x === "string");
+  }
 
   return res.json({
     email: user.email,
     first_name: user.first_name ?? null,
     last_name: user.last_name ?? null,
     profile: {
-      ...profile,
+      display_name: profile?.display_name ?? null,
+      username: profile?.username ?? null,
+      bio: profile?.bio ?? null,
+      avatar_path: profile?.avatar_path ?? null,
       avatar_url: publicUrlFromPath(profile?.avatar_path),
+      preferences: prefsArr,
+      updated_at: profile?.updated_at ?? null,
     },
   });
 });
@@ -161,6 +179,54 @@ router.post("/profile/avatar", uploadAvatar, async (req, res) => {
   } catch (e: any) {
     console.error("[avatar] failed", e);
     return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+/** PUT /api/profile/preferences { email, preferences: string[] } */
+router.put("/profile/preferences", async (req, res) => {
+  try {
+    const email = String(req.body?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const preferences = req.body?.preferences;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+    if (
+      !Array.isArray(preferences) ||
+      !preferences.every((x: any) => typeof x === "string")
+    ) {
+      return res
+        .status(400)
+        .json({ error: "preferences must be an array of strings" });
+    }
+
+    const { data: user, error: uErr } = await db
+      .from("users")
+      .select("user_id")
+      .eq("email", email)
+      .maybeSingle();
+    if (uErr) return res.status(500).json({ error: uErr.message });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    await ensureProfile(user.user_id);
+
+    const { data, error } = await db
+      .from("profiles")
+      .update({
+        preferences, // if column is text[], this can be an array directly
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.user_id)
+      .select("preferences")
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ ok: true, preferences: data.preferences });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 

@@ -33,10 +33,76 @@
 
   <!-- Right: Description -->
   <div class="col right">
-    <h2>About</h2>
-    <p class="desc">BIO HERE (changable)</p>
-    <div class="desc-box">
-      <p>Nothing here yet. extra space for hobbies or something else</p>
+    <div class="about-header">
+      <h2>About Me</h2>
+      <button *ngIf="!editingBio()" class="btn dark" (click)="startEditBio()">Edit</button>
+    </div>
+
+    <!-- View mode -->
+    <div *ngIf="!editingBio(); else editBioTpl" class="desc-box">
+      <p *ngIf="about(); else emptyBio">{{ about() }}</p>
+      <ng-template #emptyBio>
+        <p class="empty-text">Nothing here yet. Click Edit to add a short bio.</p>
+      </ng-template>
+    </div>
+
+    <!-- Edit mode -->
+    <ng-template #editBioTpl>
+      <div class="desc-box">
+        <textarea
+          class="bio-input"
+          [value]="tempBio()"
+          (input)="tempBio.set(($any($event.target).value || '').slice(0, 500))"
+          placeholder="Write a short bio… (max 500 chars)"
+          rows="5"
+          maxlength="500"
+        ></textarea>
+
+        <div class="muted small mt-6">{{ tempBio().length }}/500</div>
+
+        <div class="actions">
+          <button class="btn light" [disabled]="savingBio()" (click)="saveBio()">Save</button>
+          <button class="btn light" [disabled]="savingBio()" (click)="cancelEditBio()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </ng-template>
+
+    <!-- Preferences (kept below About) -->
+    <h2 class="mt-pref">Preferences</h2>
+
+    <div class="prefs-box">
+      <!-- Chips -->
+      <div class="chips" *ngIf="preferences().length; else noPrefs">
+        <span class="chip" *ngFor="let p of preferences(); let i = index">
+          {{ p }}
+          <button class="x" (click)="removePref(i)" aria-label="Remove">×</button>
+        </span>
+      </div>
+      <ng-template #noPrefs>
+        <div class="empty-text">No preferences yet. Add a few below.</div>
+      </ng-template>
+
+      <!-- Add input -->
+      <div class="add-row">
+        <input
+          #prefInput
+          class="pref-input"
+          type="text"
+          placeholder="Type a preference and press save"
+          (keydown.enter)="addPref(prefInput.value); prefInput.value = ''"
+          maxlength="40"
+        />
+        <button class="btn dark" (click)="addPref(prefInput.value); prefInput.value = ''">
+          Add
+        </button>
+      </div>
+
+      <!-- Save -->
+      <div class="actions">
+        <button class="btn dark full" (click)="savePrefs()">Save Preferences</button>
+      </div>
     </div>
   </div>
 </section>
