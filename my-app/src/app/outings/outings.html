@@ -3,47 +3,63 @@
     <h1>My Outings</h1>
     <div class="sort">
       <span>Sort by:</span>
-      <button class="sort-btn">
-        Trip start date
-        <span class="chev">▾</span>
+      <button class="sort-btn" disabled>
+        Trip start date <span class="chev">▾</span>
       </button>
     </div>
   </header>
 
-  <!-- action row -->
   <div class="actions-row">
-    <button class="action-tile">
+    <button class="action-tile" (click)="toggleForm()">
       <span class="plus">＋</span>
       <span>Create a new outing</span>
     </button>
   </div>
 
-  <!-- list -->
+  <form class="create-form" *ngIf="showForm" (ngSubmit)="createOuting()">
+    <div class="row">
+      <label>Title
+        <input type="text" [(ngModel)]="title" name="title" required />
+      </label>
+      <label>Location
+        <input type="text" [(ngModel)]="location" name="location" required />
+      </label>
+    </div>
+    <div class="row">
+      <label>Start date
+        <input type="date" [(ngModel)]="start" name="start" required />
+      </label>
+      <label>End date
+        <input type="date" [(ngModel)]="end" name="end" required />
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" [disabled]="isSubmitting">Create</button>
+      <button type="button" class="ghost" (click)="toggleForm()">Cancel</button>
+    </div>
+  </form>
+
   <div class="list">
     <article class="card" *ngFor="let o of outings">
       <div class="thumb">
-        <img [src]="o.image" alt="" />
-        <span class="badge" *ngIf="o.current">Current Outing</span>
+        <!-- simple placeholder image keyed by id -->
+        <img src="https://picsum.photos/seed/{{ o.id }}/900/400" alt="" />
       </div>
-
       <div class="content">
         <div class="title-row">
           <h3>{{ o.title }}</h3>
-          <button class="icon-btn" aria-label="More">⋯</button>
+          <button class="icon-btn" disabled>⋯</button>
         </div>
-
         <div class="meta">
-          <span class="meta-chip">📅 {{ o.dateText }}</span>
-          <span class="meta-chip">📍 {{ o.locationText }}</span>
+          <span class="meta-chip">📅 {{ o.start_date }} → {{ o.end_date }}</span>
+          <span class="meta-chip">📍 {{ o.location }}</span>
         </div>
-
         <div class="footer">
-          <div class="avatars" *ngIf="o.members?.length">
-            <img *ngFor="let m of o.members; let i = index"
-                 [src]="m" [style.zIndex]="10 - i" alt="" />
-          </div>
+          <button (click)="deleteOuting(o.id)">Delete</button>
         </div>
       </div>
     </article>
+
+    <p *ngIf="!outings?.length" class="empty">No outings yet. Create your first one!</p>
   </div>
 </section>

@@ -14,6 +14,7 @@ const API = 'http://localhost:3001';
 })
 export class ProfileSettings implements OnInit {
   email = signal<string>(sessionStorage.getItem('userEmail') || '');
+  
   firstName = signal<string>('');
   lastName = signal<string>('');
   avatarUrl: string | null = null;

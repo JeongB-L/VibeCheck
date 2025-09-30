@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { Outings } from '../outings';
+import { Outings } from './outings';
 
 describe('Outings', () => {
   let component: Outings;
