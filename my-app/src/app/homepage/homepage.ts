@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 })
 export class Homepage {
   userEmail = sessionStorage.getItem('userEmail') || '';
+  userId = sessionStorage.getItem('userId') || '';
 
   constructor(private router: Router) {}
 
@@ -18,12 +19,13 @@ export class Homepage {
   }
 
   goMyOutings() {
-    this.router.navigate(['/my-outings']);
+    this.router.navigate(['/outings']);
   }
 
   logout() {
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('userEmail');
+    sessionStorage.removeItem('userId');
     this.router.navigate(['/login']);
   }
 }

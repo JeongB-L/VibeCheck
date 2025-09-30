@@ -37,6 +37,6 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
-  { path: 'my-outings',
+  { path: 'outings',
       component: Outings }
 ];
