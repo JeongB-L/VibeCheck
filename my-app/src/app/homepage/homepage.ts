@@ -21,6 +21,9 @@ export class Homepage {
   goMyOutings() {
     this.router.navigate(['/outings']);
   }
+  goContact() {
+    this.router.navigate(['/contact']);
+  }
 
   logout() {
     sessionStorage.removeItem('authToken');

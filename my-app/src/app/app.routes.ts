@@ -7,6 +7,7 @@ import { VerifyEmailComponent } from './verify_email_page/verify-email';
 import { ResetPassword } from './reset_password/reset_password';
 import { authGuard } from './auth.guard';
 import { Outings } from './outings/outings';
+import { ContactComponent } from './contact/contact';
 
 export const routes: Routes = [
   {
@@ -38,5 +39,9 @@ export const routes: Routes = [
       import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
   { path: 'outings',
-      component: Outings }
+      component: Outings },
+  { path: 'contact', component: ContactComponent },
+
+
+
 ];

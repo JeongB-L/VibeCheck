@@ -1,0 +1,67 @@
+<section class="contact-wrap" aria-label="Contact information">
+  <div class="back-btn-wrap">
+    <button class="back-btn" (click)="goHome()" aria-label="Back to Home">← Back</button>
+  </div>
+
+  <header class="hero">
+    <img src="assets/vibechecklogo.png" alt="VibeCheck logo" class="logo" />
+    <div>
+      <h1>Contact {{ company.name }}</h1>
+      <p class="sub">We’re here to help. Reach out any time.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <article class="card">
+      <h2>Get in touch</h2>
+      <ul class="list">
+        <li>
+          <span class="k">Email</span>
+          <a class="v" [href]="'mailto:' + company.email" title="Send us an email">
+            {{ company.email }}
+          </a>
+        </li>
+        <li>
+          <span class="k">Phone</span>
+          <span class="v">{{ company.phone }}</span>
+        </li>
+        <li>
+          <span class="k">Address</span>
+          <span class="v">{{ fullAddress }}</span>
+        </li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <h2>Hours</h2>
+      <ul class="hours">
+        <li *ngFor="let h of company.hours">
+          <span class="label">{{ h.label }}</span>
+          <span class="value">{{ h.value }}</span>
+        </li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <h2>Socials</h2>
+      <ul class="socials">
+        <li *ngFor="let s of company.socials">
+          <a [href]="s.href" target="_blank" rel="noopener">{{ s.label }}</a>
+        </li>
+      </ul>
+    </article>
+  </div>
+
+    <div class="map-card card">
+    <h2>Find us</h2>
+    <div class="map-wrap">
+        <iframe
+        title="VibeCheck HQ Map"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        src="https://www.google.com/maps?q=340+Centennial+Mall+Dr,+West+Lafayette,+IN+47907+(HQ)&z=14&output=embed">
+        </iframe>
+    </div>
+    <p class="map-caption">VibeCheck HQ</p>
+    </div>
+</section>
