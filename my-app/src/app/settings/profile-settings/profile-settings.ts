@@ -2,19 +2,20 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
+import { HeaderComponent } from '../../header/header';
 
 const API = 'http://localhost:3001';
 
 @Component({
   selector: 'app-profile-settings',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, HeaderComponent],
   templateUrl: './profile-settings.html',
   styleUrl: './profile-settings.css',
 })
 export class ProfileSettings implements OnInit {
   email = signal<string>(sessionStorage.getItem('userEmail') || '');
-  
+
   firstName = signal<string>('');
   lastName = signal<string>('');
   avatarUrl: string | null = null;

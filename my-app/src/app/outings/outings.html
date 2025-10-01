@@ -1,11 +1,11 @@
+<app-header [showOutings]="true"></app-header>
+
 <section class="wrap">
   <header class="top">
     <h1>My Outings</h1>
     <div class="sort">
       <span>Sort by:</span>
-      <button class="sort-btn" disabled>
-        Trip start date <span class="chev">▾</span>
-      </button>
+      <button class="sort-btn" disabled>Trip start date <span class="chev">▾</span></button>
     </div>
   </header>
 
@@ -18,18 +18,22 @@
 
   <form class="create-form" *ngIf="showForm" (ngSubmit)="createOuting()">
     <div class="row">
-      <label>Title
+      <label
+        >Title
         <input type="text" [(ngModel)]="title" name="title" required />
       </label>
-      <label>Location
+      <label
+        >Location
         <input type="text" [(ngModel)]="location" name="location" required />
       </label>
     </div>
     <div class="row">
-      <label>Start date
+      <label
+        >Start date
         <input type="date" [(ngModel)]="start" name="start" required />
       </label>
-      <label>End date
+      <label
+        >End date
         <input type="date" [(ngModel)]="end" name="end" required />
       </label>
     </div>
