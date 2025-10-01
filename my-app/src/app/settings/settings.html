@@ -4,7 +4,7 @@
   </div>
 
   <div class="actions">
-    <!-- Outing Button outside of Hamburger Menu -->
+    <!-- Keep My Outings always visible (outside menu) -->
     <button class="nav-btn" (click)="goMyOutings()">My Outings</button>
 
     <!-- Hamburger -->
@@ -20,7 +20,6 @@
       <span class="bar"></span>
     </button>
 
-    <!-- Dropdown -->
     <div class="menu" *ngIf="menuOpen()" role="menu">
       <button class="menu-item" role="menuitem" (click)="goProfile()">My Profile</button>
       <button class="menu-item" role="menuitem" (click)="goSettings()">Settings</button>
@@ -29,6 +28,18 @@
   </div>
 </header>
 
-<h1>Welcome to the Home Page!</h1>
+<main class="container">
+  <h1>Settings</h1>
 
+  <section class="card">
+    <h2>Account</h2>
+    <p class="muted">
+      Deactivate account will permanently remove your account and associated data (profiles,
+      outings). This action cannot be undone.
+    </p>
+    <button class="danger-btn" (click)="deactivateAccount()">Deactivate account</button>
+  </section>
+</main>
+
+<!-- click-away -->
 <div class="scrim" *ngIf="menuOpen()" (click)="closeMenu()"></div>

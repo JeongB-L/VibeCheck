@@ -8,6 +8,7 @@ import { ResetPassword } from './reset_password/reset_password';
 import { authGuard } from './auth.guard';
 import { Outings } from './outings/outings';
 import { ContactComponent } from './contact/contact';
+import { SettingsPage } from './settings/settings';
 
 export const routes: Routes = [
   {
@@ -38,10 +39,7 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
-  { path: 'outings',
-      component: Outings },
+  { path: 'outings', component: Outings },
   { path: 'contact', component: ContactComponent },
-
-
-
+  { path: 'settings', component: SettingsPage },
 ];
