@@ -3,23 +3,24 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
+import { HeaderComponent } from '../header/header';
 
 const API = 'http://localhost:3001';
 
 type Outing = {
-  id: number;           // bigserial in DB
+  id: number; // bigserial in DB
   title: string;
   location: string;
-  start_date: string;   // yyyy-mm-dd
-  end_date: string;     // yyyy-mm-dd
-  creator_id: string;   // uuid
-  created_at: string;   // timestamptz
+  start_date: string; // yyyy-mm-dd
+  end_date: string; // yyyy-mm-dd
+  creator_id: string; // uuid
+  created_at: string; // timestamptz
 };
 
 @Component({
   selector: 'app-outings',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, HeaderComponent],
   templateUrl: './outings.html',
   styleUrl: './outings.css',
 })
@@ -43,7 +44,7 @@ export class Outings implements OnInit {
     console.log('Session storage userId:', sessionStorage.getItem('userId'));
     console.log('Session storage userEmail:', sessionStorage.getItem('userEmail'));
     console.log('Computed userEmail:', this.userEmail);
-    
+
     // Check if we have userEmail, if not redirect to login
     if (!this.userEmail) {
       this.toast.error('Please log in to view outings');
@@ -51,7 +52,7 @@ export class Outings implements OnInit {
       window.location.href = '/login';
       return;
     }
-    
+
     this.fetchOutings();
   }
 
@@ -82,16 +83,19 @@ export class Outings implements OnInit {
     try {
       console.log('Fetching outings from:', `${API}/api/outings`);
       console.log('With userEmail:', this.userEmail);
-      
-      const res = await fetch(`${API}/api/outings?email=${encodeURIComponent(this.userEmail || '')}`, { 
-        headers: this.headers() 
-      });
+
+      const res = await fetch(
+        `${API}/api/outings?email=${encodeURIComponent(this.userEmail || '')}`,
+        {
+          headers: this.headers(),
+        }
+      );
       console.log('Response status:', res.status);
       console.log('Response ok:', res.ok);
-      
+
       const body = await res.json().catch(() => ({}));
       console.log('Response body:', body);
-      
+
       if (!res.ok) throw new Error(body?.error ?? 'Failed to load outings');
       this.outings = (body.outings ?? []) as Outing[];
     } catch (e: any) {
@@ -173,10 +177,13 @@ export class Outings implements OnInit {
       return;
     }
     try {
-      const res = await fetch(`${API}/api/outings/${id}?email=${encodeURIComponent(this.userEmail || '')}`, {
-        method: 'DELETE',
-        headers: this.headers(),
-      });
+      const res = await fetch(
+        `${API}/api/outings/${id}?email=${encodeURIComponent(this.userEmail || '')}`,
+        {
+          method: 'DELETE',
+          headers: this.headers(),
+        }
+      );
       if (!res.ok && res.status !== 204) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? 'Delete failed');

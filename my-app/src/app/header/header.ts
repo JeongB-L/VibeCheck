@@ -1,18 +1,19 @@
-import { Component, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, Input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HeaderComponent } from '../header/header';
+import { Router } from '@angular/router';
 
 @Component({
-  selector: 'app-homepage',
+  selector: 'app-header',
   standalone: true,
-  imports: [CommonModule, HeaderComponent],
-  templateUrl: './homepage.html',
-  styleUrl: './homepage.css',
+  imports: [CommonModule],
+  templateUrl: './header.html',
+  styleUrl: './header.css',
 })
-export class Homepage {
-  userEmail = sessionStorage.getItem('userEmail') || '';
-  userId = sessionStorage.getItem('userId') || '';
+export class HeaderComponent {
+  @Input() logoSrc = 'assets/vibechecklogo.png';
+  @Input() showOutings = true; // keep Outings visible outside menu
+  @Input() showContact = false; // optional extra action
+
   menuOpen = signal(false);
 
   constructor(private router: Router) {}
@@ -24,6 +25,12 @@ export class Homepage {
     this.menuOpen.set(false);
   }
 
+  goMyOutings() {
+    this.router.navigate(['/outings']);
+  }
+  goContact() {
+    this.router.navigate(['/contact']);
+  }
   goProfile() {
     this.closeMenu();
     this.router.navigate(['/settings/profile']);
@@ -31,12 +38,6 @@ export class Homepage {
   goSettings() {
     this.closeMenu();
     this.router.navigate(['/settings']);
-  }
-  goMyOutings() {
-    this.router.navigate(['/outings']);
-  }
-  goContact() {
-    this.router.navigate(['/contact']);
   }
 
   logout() {
