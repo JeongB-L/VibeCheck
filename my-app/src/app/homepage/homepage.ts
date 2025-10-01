@@ -1,23 +1,36 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-homepage',
-  imports: [],
-  standalone: true, 
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './homepage.html',
   styleUrl: './homepage.css',
 })
 export class Homepage {
   userEmail = sessionStorage.getItem('userEmail') || '';
   userId = sessionStorage.getItem('userId') || '';
+  menuOpen = signal(false);
 
   constructor(private router: Router) {}
 
-  goProfile() {
-    this.router.navigate(['/settings/profile']); // adjust route if different
+  toggleMenu() {
+    this.menuOpen.update((v) => !v);
+  }
+  closeMenu() {
+    this.menuOpen.set(false);
   }
 
+  goProfile() {
+    this.closeMenu();
+    this.router.navigate(['/settings/profile']);
+  }
+  goSettings() {
+    this.closeMenu();
+    this.router.navigate(['/settings']);
+  }
   goMyOutings() {
     this.router.navigate(['/outings']);
   }
@@ -29,6 +42,7 @@ export class Homepage {
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('userEmail');
     sessionStorage.removeItem('userId');
+    this.closeMenu();
     this.router.navigate(['/login']);
   }
 }

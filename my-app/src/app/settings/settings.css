@@ -1,5 +1,8 @@
+/* Header (same as homepage) */
 .header {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -8,7 +11,6 @@
   padding: 12px 24px;
   font-family: system-ui, sans-serif;
 }
-
 .left {
   display: flex;
   align-items: center;
@@ -44,16 +46,6 @@
   background: #0b1220;
 }
 
-.nav-btn.ghost {
-  background: #ffffff;
-  color: #111827;
-  border: 1px solid #e5e7eb;
-}
-.nav-btn.ghost:hover {
-  background: #f9fafb;
-}
-
-/* hamburger button */
 .icon-btn {
   display: inline-flex;
   flex-direction: column;
@@ -74,7 +66,6 @@
   margin: 0 auto;
 }
 
-/* dropdown menu */
 .menu {
   position: absolute;
   right: 0;
@@ -111,8 +102,40 @@
   z-index: 10;
 }
 
-@media (max-width: 480px) {
-  .nav-btn {
-    padding: 8px 12px;
-  }
+/* Page layout */
+.container {
+  max-width: 960px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+h1 {
+  font-size: 24px;
+  margin: 0 0 16px;
+}
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.muted {
+  color: #6b7280;
+  margin: 0 0 12px;
+}
+
+.danger-btn {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.danger-btn:hover {
+  background: #fecaca;
 }
