@@ -25,6 +25,9 @@
     <div class="menu" *ngIf="menuOpen()" role="menu">
       <button class="menu-item" role="menuitem" (click)="goProfile()">My Profile</button>
       <button class="menu-item" role="menuitem" (click)="goSettings()">Settings</button>
+      <button class="menu-item" role="menuitem" (click)="goContact(); closeMenu()">
+        Contact Us
+      </button>
       <button class="menu-item danger" role="menuitem" (click)="logout()">Logout</button>
     </div>
   </div>
