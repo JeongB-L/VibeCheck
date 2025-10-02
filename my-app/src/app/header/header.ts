@@ -1,6 +1,7 @@
 import { Component, Input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { InactivityService } from '../inactivity/inactivity.service';
 
 @Component({
   selector: 'app-header',
@@ -16,7 +17,10 @@ export class HeaderComponent {
 
   menuOpen = signal(false);
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private inactivity: InactivityService) {
+    const email = sessionStorage.getItem('userEmail') || '';
+    this.inactivity.initFromServer(email);
+  }
 
   toggleMenu() {
     this.menuOpen.update((v) => !v);

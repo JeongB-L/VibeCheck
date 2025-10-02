@@ -9,7 +9,7 @@ const router = Router();
 async function ensureProfile(user_id: string) {
   const { data, error } = await db
     .from("profiles")
-    .select("user_id")
+    .select("user_id, idle_timeout_minutes")
     .eq("user_id", user_id)
     .maybeSingle();
   if (!data) {
@@ -39,7 +39,9 @@ router.get("/profile/me", async (req, res) => {
 
   const { data: profile, error: pErr } = await db
     .from("profiles")
-    .select("display_name, username, bio, avatar_path, preferences, updated_at")
+    .select(
+      "display_name, username, bio, avatar_path, preferences, updated_at, idle_timeout_minutes"
+    )
     .eq("user_id", user.user_id)
     .maybeSingle();
   if (pErr) return res.status(500).json({ error: pErr.message });
@@ -69,6 +71,7 @@ router.get("/profile/me", async (req, res) => {
       avatar_url: publicUrlFromPath(profile?.avatar_path),
       preferences: prefsArr,
       updated_at: profile?.updated_at ?? null,
+      idle_timeout_minutes: profile?.idle_timeout_minutes ?? 5,
     },
   });
 });
@@ -225,6 +228,51 @@ router.put("/profile/preferences", async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
 
     res.json({ ok: true, preferences: data.preferences });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+/** PUT /api/profile/idle-timeout  { email: string, minutes: number } */
+router.put("/profile/idle-timeout", async (req, res) => {
+  try {
+    const email = String(req.body?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const minutes = Number(req.body?.minutes);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+    if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 720) {
+      return res
+        .status(400)
+        .json({ error: "minutes must be a positive integer ≤ 720" });
+    }
+
+    const { data: user, error: uErr } = await db
+      .from("users")
+      .select("user_id")
+      .eq("email", email)
+      .maybeSingle();
+    if (uErr) return res.status(500).json({ error: uErr.message });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    await ensureProfile(user.user_id);
+
+    const { data, error } = await db
+      .from("profiles")
+      .update({
+        idle_timeout_minutes: Math.floor(minutes),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.user_id)
+      .select("idle_timeout_minutes")
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ ok: true, idle_timeout_minutes: data.idle_timeout_minutes });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
