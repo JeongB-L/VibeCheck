@@ -1,9 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { HeaderComponent } from '../header/header';
+import { Router } from '@angular/router';
+
 
 const API = 'http://localhost:3001';
 
@@ -31,13 +33,26 @@ export class Outings implements OnInit {
   showForm = false;
   isSubmitting = false;
 
+  menuForId: number | null = null;
+
   // form fields
   title = '';
   location = '';
   start = '';
   end = '';
 
-  constructor(private toast: ToastrService) {}
+  constructor(private toast: ToastrService, private router: Router) {}
+
+  goDetail(id: number) { this.router.navigate(['/outings', id]); }
+
+
+  @HostListener('document:click', ['$event'])
+  onDocClick(ev: MouseEvent) {
+    const target = ev.target as HTMLElement;
+    if (!target.closest('.kebab') && !target.closest('.menu')) {
+      this.menuForId = null;
+    }
+  }
 
   ngOnInit(): void {
     // Debug: Check what's in session storage
@@ -73,6 +88,11 @@ export class Outings implements OnInit {
   toggleForm(): void {
     this.showForm = !this.showForm;
   }
+
+  toggleMenu(id: number) {
+    this.menuForId = this.menuForId === id ? null : id;
+  }
+
 
   private validDates(): boolean {
     return !!this.start && !!this.end && new Date(this.start) <= new Date(this.end);
