@@ -5,6 +5,10 @@ import { Login } from './login/login';
 import { Homepage } from './homepage/homepage';
 import { VerifyEmailComponent } from './verify_email_page/verify-email';
 import { ResetPassword } from './reset_password/reset_password';
+import { authGuard } from './auth.guard';
+import { Outings } from './outings/outings';
+import { ContactComponent } from './contact/contact';
+import { SettingsPage } from './settings/settings';
 
 export const routes: Routes = [
   {
@@ -23,10 +27,19 @@ export const routes: Routes = [
   {
     path: 'homepage',
     component: Homepage,
+    canActivate: [authGuard],
   },
   { path: 'verify', component: VerifyEmailComponent },
   {
     path: 'reset_password',
     component: ResetPassword,
   },
+  {
+    path: 'settings/profile',
+    loadComponent: () =>
+      import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
+  },
+  { path: 'outings', component: Outings },
+  { path: 'contact', component: ContactComponent },
+  { path: 'settings', component: SettingsPage },
 ];

@@ -4,6 +4,9 @@ import loginRouter from "./login";
 import verifyEmailRouter from "./verify-email";
 import resetCodeRouter from "./reset-code";
 import resetPasswordRouter from "./reset-password";
+import profileRouter from "./profile";
+import outingRouter from "./outing";
+import removeAccountRouter from "./removeaccount";
 
 const router = Router();
 
@@ -16,5 +19,8 @@ router.use(loginRouter); // POST /login
 router.use(verifyEmailRouter); // POST /verify-email
 router.use(resetCodeRouter); // POST /resend-code
 router.use(resetPasswordRouter); // POST /reset_password
+router.use(profileRouter); // GET /api/profile/me, PATCH /api/profile
+router.use(outingRouter);
+router.use(removeAccountRouter); // DELETE /api/account
 
 export default router;

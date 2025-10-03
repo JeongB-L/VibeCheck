@@ -41,6 +41,18 @@ export class Login {
         return;
       }
 
+      const token = body?.token;
+      
+      if (typeof token === 'string' && token.length > 0) {
+        sessionStorage.setItem('authToken', token);
+        if (body?.user?.email) sessionStorage.setItem('userEmail', body.user.email);
+        if (body?.user?.user_id) {
+            sessionStorage.setItem('userId', body.user.user_id);  // DB key
+  }
+      } else {
+        console.warn('Login succeeded but no token found in response:', body);
+      }
+
       // alert(`Welcome, ${body.user.email}!`);
       await this.router.navigate(['/homepage']);
     } catch (err: any) {

@@ -122,3 +122,9 @@ button[type='submit']:hover {
   color: #6b7280; /* Tailwind gray-500 */
   margin-top: 0.25rem;
 }
+
+.contact-link {
+  display: inline-block;
+  margin: 1rem 0;
+  font-weight: bold;
+}

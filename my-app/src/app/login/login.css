@@ -116,3 +116,8 @@ button[type='submit']:hover {
   height: 10rem;
   margin: 0 auto 1.25rem;
 }
+.contact-link {
+  display: inline-block;
+  margin: 1rem 0;
+  font-weight: bold;
+}
