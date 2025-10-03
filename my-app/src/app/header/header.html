@@ -5,7 +5,6 @@
 
   <div class="actions">
     <!-- Always-visible primary CTAs -->
-    <button *ngIf="showOutings" class="nav-btn" (click)="goMyOutings()">My Outings</button>
     <button *ngIf="showContact" class="nav-btn ghost" (click)="goContact()">Contact</button>
 
     <!-- Hamburger -->
@@ -24,6 +23,7 @@
     <!-- Dropdown -->
     <div class="menu" *ngIf="menuOpen()" role="menu">
       <button class="menu-item" role="menuitem" (click)="goProfile()">My Profile</button>
+      <button class="menu-item" role="menuitem" (click)="goMyOutings()">My Outings</button>
       <button class="menu-item" role="menuitem" (click)="goSettings()">Settings</button>
       <button class="menu-item" role="menuitem" (click)="goContact(); closeMenu()">
         Contact Us

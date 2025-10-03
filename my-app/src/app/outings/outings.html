@@ -5,7 +5,7 @@
     <h1>My Outings</h1>
     <div class="sort">
       <span>Sort by:</span>
-      <button class="sort-btn" disabled>Trip start date <span class="chev">▾</span></button>
+      <button class="sort-btn" disabled>Outing start date <span class="chev">▾</span></button>
     </div>
   </header>
 
@@ -16,50 +16,82 @@
     </button>
   </div>
 
-  <form class="create-form" *ngIf="showForm" (ngSubmit)="createOuting()">
-    <div class="row">
-      <label
-        >Title
-        <input type="text" [(ngModel)]="title" name="title" required />
-      </label>
-      <label
-        >Location
-        <input type="text" [(ngModel)]="location" name="location" required />
-      </label>
+  <!-- Right-side sheet -->
+  <div class="sheet-backdrop" *ngIf="showForm" (click)="toggleForm()"></div>
+
+  <form class="sheet" *ngIf="showForm" (ngSubmit)="createOuting()" (click)="$event.stopPropagation()">
+    <div class="sheet-header">
+      <h2>Create a outing</h2>
+      <button type="button" class="sheet-close" (click)="toggleForm()">✕</button>
     </div>
-    <div class="row">
-      <label
-        >Start date
-        <input type="date" [(ngModel)]="start" name="start" required />
-      </label>
-      <label
-        >End date
-        <input type="date" [(ngModel)]="end" name="end" required />
-      </label>
+
+    <div class="sheet-body">
+      <!-- Outing name -->
+      <div class="field">
+        <label for="title">Outing name</label>
+        <input id="title" type="text"
+               [(ngModel)]="title" name="title"
+               maxlength="80" required
+               placeholder="e.g., Hangout in Chicago" />
+        <span class="hint">{{ title.length || 0 }}/80 max characters</span>
+      </div>
+
+      <!-- Destination -->
+      <div class="field">
+        <label for="location">Destination</label>
+        <input id="location" type="text"
+               [(ngModel)]="location" name="location"
+               placeholder="Where to?" required />
+      </div>
+
+      <!-- Dates -->
+      <div class="row">
+        <div class="field">
+          <label for="start">Start date</label>
+          <input id="start" type="date" [(ngModel)]="start" name="start" required />
+        </div>
+        <div class="field">
+          <label for="end">End date</label>
+          <input id="end" type="date" [(ngModel)]="end" name="end" required />
+        </div>
+      </div>
     </div>
-    <div class="form-actions">
-      <button type="submit" [disabled]="isSubmitting">Create</button>
+
+    <div class="sheet-actions">
+      <button type="submit" [disabled]="isSubmitting">Create outing</button>
       <button type="button" class="ghost" (click)="toggleForm()">Cancel</button>
     </div>
   </form>
 
   <div class="list">
-    <article class="card" *ngFor="let o of outings">
+    <article class="card"
+         *ngFor="let o of outings"
+         (click)="goDetail(o.id)"
+         role="button" tabindex="0">
       <div class="thumb">
-        <!-- simple placeholder image keyed by id -->
         <img src="https://picsum.photos/seed/{{ o.id }}/900/400" alt="" />
       </div>
+
       <div class="content">
         <div class="title-row">
           <h3>{{ o.title }}</h3>
-          <button class="icon-btn" disabled>⋯</button>
+
+          <div class="menu-wrap">
+            <button class="icon-btn kebab" (click)="toggleMenu(o.id); $event.stopPropagation()">⋯</button>
+            <div class="menu" *ngIf="menuForId === o.id" (click)="$event.stopPropagation()">
+              <button class="menu-item">Invite</button>
+              <button class="menu-item" disabled>Share trip</button>
+              <button class="menu-item" disabled>Make trip public</button>
+              <button class="menu-item" disabled>Mark trip as completed</button>
+              <hr />
+              <button class="menu-item danger" (click)="deleteOuting(o.id)">Delete</button>
+            </div>
+          </div>
         </div>
+
         <div class="meta">
-          <span class="meta-chip">📅 {{ o.start_date }} → {{ o.end_date }}</span>
-          <span class="meta-chip">📍 {{ o.location }}</span>
-        </div>
-        <div class="footer">
-          <button (click)="deleteOuting(o.id)">Delete</button>
+          <span class="meta-chip"><i class="fa-regular fa-calendar"></i>{{ o.start_date }} → {{ o.end_date }}</span>
+          <span class="meta-chip"><i class="fa-regular fa-map"></i> {{ o.location }}</span>
         </div>
       </div>
     </article>
