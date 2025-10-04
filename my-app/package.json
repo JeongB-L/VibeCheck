@@ -29,6 +29,7 @@
     "@angular/forms": "^20.3.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
+    "@fortawesome/fontawesome-free": "^7.1.0",
     "express": "^5.1.0",
     "ngx-toastr": "^19.1.0",
     "nodemailer": "^7.0.6",

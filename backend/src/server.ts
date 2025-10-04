@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import apiRouter from "./routes";
+import authGoogleRouter from './routes/auth-google';
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -16,9 +17,11 @@ app.use(
     origin: ["http://localhost:4200", "http://127.0.0.1:4200"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
+    credentials: true,
   })
 );
 app.use(express.json());
+
 
 // Simple request logger (optional, but handy)
 app.use((req, _res, next) => {
@@ -28,6 +31,8 @@ app.use((req, _res, next) => {
 
 // Mount all API routes under /api
 app.use("/api", apiRouter);
+
+app.use('/api', authGoogleRouter);
 
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
