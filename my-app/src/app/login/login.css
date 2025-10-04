@@ -121,3 +121,8 @@ button[type='submit']:hover {
   margin: 1rem 0;
   font-weight: bold;
 }
+#google-login-btn {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
