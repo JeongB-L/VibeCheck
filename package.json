@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^7.1.0"
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "@googlemaps/js-api-loader": "^2.0.1"
   }
 }

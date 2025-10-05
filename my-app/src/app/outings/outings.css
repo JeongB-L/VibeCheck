@@ -171,3 +171,34 @@ h3 { margin:0; font-size:20px; }
   color:#fff; border-color:#0f5a35;
 }
 .modal-actions .danger:hover { filter: brightness(0.95); }
+
+/* Autocomplete UI */
+.loc-field { position: relative; }
+.loc-input-wrap { position: relative; }
+.loc-icon {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%); opacity: .6; pointer-events: none;
+}
+
+/* keep scrolling inside the dropdown; don't pull the sheet up/down */
+.loc-dropdown {
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 6px);
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.12);
+  max-height: 300px;
+  overflow: auto;
+  z-index: 1000;
+  overscroll-behavior: contain;   /* ← stops scroll chaining */
+}
+
+.loc-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; cursor: pointer;
+}
+.loc-item:hover { background: #f8fafc; }
+.loc-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }
+.loc-texts { min-width: 0; }
+.loc-name { font-weight: 700; color: #0f172a; }
+.loc-addr { font-size: 12px; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loc-loading, .loc-empty { padding: 10px 12px; color: #475569; }
