@@ -27,6 +27,10 @@ export class ProfileSettings implements OnInit {
   savingBio = signal<boolean>(false);
   preferences = signal<string[]>([]);
 
+  // previous profile versions
+  profileHistory = signal<any[]>([]);
+  loadingProfileHistory = signal<boolean>(false);
+
   constructor(private router: Router, private toastr: ToastrService) {}
 
   fullName = computed(() => {
@@ -186,6 +190,47 @@ export class ProfileSettings implements OnInit {
         return;
       }
       this.toastr.success('Preferences saved.', 'Success');
+    } catch (e: any) {
+      this.toastr.error(e?.message ?? 'Network error', 'Error');
+    }
+  }
+
+  async loadProfileHistory() {
+    this.loadingProfileHistory.set(true);
+    try {
+      // get profile history by user email
+      const res = await fetch(
+        `${API}/api/profile/history?email=${encodeURIComponent(this.email())}`
+      );
+      const body = await res.json();
+      if (res.ok) {
+        this.profileHistory.set(body.history || []);
+      } else {
+        this.toastr.error(body?.error ?? 'Could not load history', 'Error');
+      }
+    } catch (e: any) {
+      this.toastr.error(e?.message ?? 'Network error', 'Error');
+    } finally {
+      this.loadingProfileHistory.set(false);
+    }
+  }
+
+  async restoreProfileVersion(historyId: number) {
+    if (!confirm('Restore this version? This will overwrite your current profile.')) return;
+    try {
+      const res = await fetch(`${API}/api/profile/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: this.email(), history_id: historyId }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        this.toastr.success('Profile restored.', 'Success');
+        this.loadMe(); // Reload current profile
+        this.loadProfileHistory(); // Refresh history
+      } else {
+        this.toastr.error(body?.error ?? 'Restore failed', 'Error');
+      }
     } catch (e: any) {
       this.toastr.error(e?.message ?? 'Network error', 'Error');
     }
