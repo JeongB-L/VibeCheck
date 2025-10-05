@@ -219,7 +219,7 @@ router.put("/profile/preferences", async (req, res) => {
     const { data, error } = await db
       .from("profiles")
       .update({
-        preferences, // if column is text[], this can be an array directly
+        preferences,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", user.user_id)
