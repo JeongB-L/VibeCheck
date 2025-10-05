@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import apiRouter from "./routes";
 import authGoogleRouter from './routes/auth-google';
+import placesRouter from "./routes/places";
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -21,6 +22,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use("/api/places", placesRouter);
 
 
 // Simple request logger (optional, but handy)

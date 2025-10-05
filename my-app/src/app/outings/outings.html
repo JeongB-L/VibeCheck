@@ -29,32 +29,45 @@
       <!-- Outing name -->
       <div class="field">
         <label for="title">Outing name</label>
-        <input id="title" type="text"
-               [(ngModel)]="title" name="title"
-               maxlength="80" required
-               placeholder="e.g., Hangout in Chicago" />
+        <input id="title" type="text" [(ngModel)]="title" name="title" maxlength="80" required
+          placeholder="e.g., Hangout in Chicago" />
         <span class="hint">{{ title.length || 0 }}/80 max characters</span>
       </div>
 
       <!-- Destination -->
-      <div class="field">
+      <div class="field loc-field">
         <label for="location">Destination</label>
-        <input id="location" type="text"
-               [(ngModel)]="location" name="location"
-               placeholder="Where to?" required />
+
+        <div class="loc-input-wrap">
+          <input id="location" type="text" [value]="location"
+            (input)="onLocationInput($any($event.target).value)"
+            (blur)="onLocBlur()" placeholder="Where to?" autocomplete="off" required />
+        </div>
+
+        <div class="loc-dropdown" *ngIf="locOpen">
+          <div class="loc-item" *ngFor="let s of locResults" (mousedown)="pickPlace(s)">
+            <div class="loc-texts">
+              <div class="loc-name">{{ s.name }}</div>
+              <div class="loc-addr">{{ s.address }}</div>
+            </div>
+          </div>
+
+          <div class="loc-loading" *ngIf="locLoading">Searching…</div>
+          <div class="loc-empty" *ngIf="!locLoading && !locResults.length">No results</div>
+        </div>
       </div>
 
-      <!-- Dates -->
-      <div class="row">
-        <div class="field">
-          <label for="start">Start date</label>
-          <input id="start" type="date" [(ngModel)]="start" name="start" required />
-        </div>
-        <div class="field">
-          <label for="end">End date</label>
-          <input id="end" type="date" [(ngModel)]="end" name="end" required />
-        </div>
+    <!-- Dates -->
+    <div class="row">
+      <div class="field">
+        <label for="start">Start date</label>
+        <input id="start" type="date" [(ngModel)]="start" name="start" required />
       </div>
+      <div class="field">
+        <label for="end">End date</label>
+        <input id="end" type="date" [(ngModel)]="end" name="end" required />
+      </div>
+    </div>
     </div>
 
     <div class="sheet-actions">
@@ -64,12 +77,10 @@
   </form>
 
   <div class="list">
-    <article class="card"
-         *ngFor="let o of outings"
-         (click)="goDetail(o.id)"
-         role="button" tabindex="0">
+    <article class="card" *ngFor="let o of outings" (click)="goDetail(o.id)" role="button" tabindex="0">
       <div class="thumb">
-        <img src="https://picsum.photos/seed/{{ o.id }}/900/400" alt="" />
+        <img [src]="coverSrc(o)" (error)="coverFallback($event, o.id)" alt="" />
+
       </div>
 
       <div class="content">
@@ -100,21 +111,21 @@
   </div>
 
   <!-- Delete confirm modal -->
-<div class="modal-backdrop" *ngIf="confirmId !== null" (click)="closeDeleteConfirm()"></div>
+  <div class="modal-backdrop" *ngIf="confirmId !== null" (click)="closeDeleteConfirm()"></div>
 
-<div class="modal" *ngIf="confirmId !== null" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-  <button class="modal-x" (click)="closeDeleteConfirm()" aria-label="Close">✕</button>
+  <div class="modal" *ngIf="confirmId !== null" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <button class="modal-x" (click)="closeDeleteConfirm()" aria-label="Close">✕</button>
 
-  <h2 class="modal-title">Delete outing?</h2>
-  <p class="modal-text">
-    Once you delete an outing, it can't be restored.
-    Are you sure you want to delete <strong>{{ confirmTitle || 'this trip' }}</strong>?
-  </p>
+    <h2 class="modal-title">Delete outing?</h2>
+    <p class="modal-text">
+      Once you delete an outing, it can't be restored.
+      Are you sure you want to delete <strong>{{ confirmTitle || 'this trip' }}</strong>?
+    </p>
 
-  <div class="modal-actions">
-    <button class="ghost" (click)="closeDeleteConfirm()">Cancel</button>
-    <button class="danger" (click)="confirmDelete()">Delete</button>
+    <div class="modal-actions">
+      <button class="ghost" (click)="closeDeleteConfirm()">Cancel</button>
+      <button class="danger" (click)="confirmDelete()">Delete</button>
+    </div>
   </div>
-</div>
 
 </section>

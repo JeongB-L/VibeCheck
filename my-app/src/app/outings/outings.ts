@@ -5,7 +5,8 @@ import { RouterModule } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { HeaderComponent } from '../header/header';
 import { Router } from '@angular/router';
-
+import { PlacesService, PlaceLite } from '../places.service';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 const API = 'http://localhost:3001';
 
@@ -43,12 +44,17 @@ export class Outings implements OnInit {
   location = '';
   start = '';
   end = '';
+  //autocomplete state
+  locOpen = false;
+  locLoading = false;
+  locResults: PlaceLite[] = [];
+  private locQuery$ = new Subject<string>();
 
-  constructor(private toast: ToastrService, private router: Router) {}
+  constructor(private toast: ToastrService, private router: Router, public places: PlacesService) { }
 
   goDetail(id: number) { this.router.navigate(['/outings', id]); }
 
-   // open the confirm dialog
+  // open the confirm dialog
   openDeleteConfirm(o: Outing, ev?: MouseEvent) {
     ev?.stopPropagation();
     this.menuForId = null; // close kebab
@@ -95,9 +101,66 @@ export class Outings implements OnInit {
     }
 
     this.fetchOutings();
+
+
+    // ---------- wire autocomplete stream ---------- // ADD
+    this.locQuery$
+      .pipe(debounceTime(180), distinctUntilChanged())
+      .subscribe(async (q) => {
+        if (!q || q.length < 2) {
+          this.locResults = [];
+          this.locOpen = false;
+          return;
+        }
+        this.locLoading = true;
+        try {
+          const data = await this.places.autocomplete(q);
+          this.locResults = data.places ?? [];
+          this.locOpen = this.locResults.length > 0;
+        } catch {
+          this.locResults = [];
+          this.locOpen = false;
+        } finally {
+          this.locLoading = false;
+        }
+      });
   }
 
   // ---------- helpers ----------
+  // ---------- handlers for the Destination field ---------- // ADD
+  public onLocationInput(v: string) {
+    this.location = v;
+    this.locOpen = !!v;
+    this.locQuery$.next(v);
+  }
+
+  public onLocFocus(): void {
+    this.locOpen = this.locResults.length > 0;
+  }
+
+  public onLocBlur(): void {
+    // let click on a suggestion register
+    window.setTimeout(() => (this.locOpen = false), 150);
+  }
+
+  pickPlace(p: PlaceLite) {
+    this.location = p.name;                  // or `${p.name}, ${p.address}` // ADD
+    this.locOpen = false;
+    // If you want to persist coordinates/placeId later, store them here
+    // this.selectedPlaceId = p.id;
+    // this.selectedLat = p.lat; this.selectedLng = p.lng;
+  }
+
+coverSrc(o: Outing): string {
+  return `${API}/api/places/cover?q=${encodeURIComponent(o.location)}&w=900&h=400`;
+}
+
+coverFallback(ev: Event, id: number) {
+  (ev.target as HTMLImageElement).src = `https://picsum.photos/seed/${id}/900/400`;
+}
+
+
+
   private get userEmail(): string | null {
     const v = sessionStorage.getItem('userEmail'); // set at login
     return v;
