@@ -27,6 +27,7 @@ type Outing = {
   styleUrl: './outings.css',
 })
 export class Outings implements OnInit {
+
   outings: Outing[] = [];
 
   // UI state
@@ -34,6 +35,8 @@ export class Outings implements OnInit {
   isSubmitting = false;
 
   menuForId: number | null = null;
+  confirmId: number | null = null;
+  confirmTitle = ''
 
   // form fields
   title = '';
@@ -45,6 +48,29 @@ export class Outings implements OnInit {
 
   goDetail(id: number) { this.router.navigate(['/outings', id]); }
 
+   // open the confirm dialog
+  openDeleteConfirm(o: Outing, ev?: MouseEvent) {
+    ev?.stopPropagation();
+    this.menuForId = null; // close kebab
+    this.confirmId = o.id;
+    this.confirmTitle = o.title;
+    document.body.classList.add('no-scroll');
+  }
+
+  // close the confirm dialog
+  closeDeleteConfirm() {
+    this.confirmId = null;
+    this.confirmTitle = '';
+    document.body.classList.remove('no-scroll');
+  }
+
+  // confirm → call existing deleter
+  async confirmDelete() {
+    if (this.confirmId == null) return;
+    const id = this.confirmId;
+    this.closeDeleteConfirm();
+    await this.deleteOuting(id);
+  }
 
   @HostListener('document:click', ['$event'])
   onDocClick(ev: MouseEvent) {

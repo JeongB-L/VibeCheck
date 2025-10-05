@@ -84,7 +84,7 @@
               <button class="menu-item" disabled>Make trip public</button>
               <button class="menu-item" disabled>Mark trip as completed</button>
               <hr />
-              <button class="menu-item danger" (click)="deleteOuting(o.id)">Delete</button>
+              <button class="menu-item danger" (click)="openDeleteConfirm(o, $event)">Delete</button>
             </div>
           </div>
         </div>
@@ -98,4 +98,23 @@
 
     <p *ngIf="!outings?.length" class="empty">No outings yet. Create your first one!</p>
   </div>
+
+  <!-- Delete confirm modal -->
+<div class="modal-backdrop" *ngIf="confirmId !== null" (click)="closeDeleteConfirm()"></div>
+
+<div class="modal" *ngIf="confirmId !== null" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+  <button class="modal-x" (click)="closeDeleteConfirm()" aria-label="Close">✕</button>
+
+  <h2 class="modal-title">Delete outing?</h2>
+  <p class="modal-text">
+    Once you delete an outing, it can't be restored.
+    Are you sure you want to delete <strong>{{ confirmTitle || 'this trip' }}</strong>?
+  </p>
+
+  <div class="modal-actions">
+    <button class="ghost" (click)="closeDeleteConfirm()">Cancel</button>
+    <button class="danger" (click)="confirmDelete()">Delete</button>
+  </div>
+</div>
+
 </section>
