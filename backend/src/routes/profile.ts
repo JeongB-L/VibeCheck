@@ -2,6 +2,7 @@ import { Router } from "express";
 import { supabase as db } from "../lib/supabase";
 import { uploadAvatar } from "../middleware/upload";
 import { uploadAvatarToStorage, publicUrlFromPath } from "../utils/storage";
+import { resolve } from "path";
 
 const router = Router();
 
@@ -144,12 +145,12 @@ router.post("/profile/avatar", uploadAvatar, async (req, res) => {
     // ensure row exists
     await ensureProfile(user.user_id);
 
-    // (optional) read current to delete later
-    const { data: current } = await db
-      .from("profiles")
-      .select("avatar_path")
-      .eq("user_id", user.user_id)
-      .maybeSingle();
+    // // (optional) read current to delete later  // Commented out to preserve old avatars for history
+    // const { data: current } = await db
+    //   .from("profiles")
+    //   .select("avatar_path")
+    //   .eq("user_id", user.user_id)
+    //   .maybeSingle();
 
     // upload new
     const newPath = await uploadAvatarToStorage(user.user_id, file);
@@ -163,13 +164,13 @@ router.post("/profile/avatar", uploadAvatar, async (req, res) => {
       .single();
     if (updErr) return res.status(500).json({ error: updErr.message });
 
-    // delete old (best-effort)
-    if (current?.avatar_path && current.avatar_path !== newPath) {
-      await db.storage
-        .from("avatars")
-        .remove([current.avatar_path])
-        .catch(() => {});
-    }
+    // // delete old (best-effort)  // Commented out to preserve old avatars for history
+    // if (current?.avatar_path && current.avatar_path !== newPath) {
+    //   await db.storage
+    //     .from("avatars")
+    //     .remove([current.avatar_path])
+    //     .catch(() => {});
+    // }
 
     const url = publicUrlFromPath(updated.avatar_path);
     console.log("[avatar] stored", { path: updated.avatar_path, url });
@@ -218,7 +219,7 @@ router.put("/profile/preferences", async (req, res) => {
     const { data, error } = await db
       .from("profiles")
       .update({
-        preferences, // if column is text[], this can be an array directly
+        preferences,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", user.user_id)
@@ -276,6 +277,93 @@ router.put("/profile/idle-timeout", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
+});
+
+/** GET /api/profile/history?email=... */
+router.get("/profile/history", async (req, res) => {
+  // Retrieve profile change history for a user
+  const email = String(req.query.email ?? "")
+    .trim()
+    .toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Valid email is required" });
+  }
+
+  const { data: user, error: uErr } = await db
+    .from("users")
+    .select("user_id")
+    .eq("email", email)
+    .maybeSingle();
+  if (uErr) return res.status(500).json({ error: uErr.message });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  const { data: history, error: hErr } = await db
+    .from("profile_history")
+    .select("*")
+    .eq("user_id", user.user_id)
+    .order("history_timestamp", { ascending: false })
+    .limit(50);
+
+  if (hErr) return res.status(500).json({ error: hErr.message });
+
+  // Transform for client
+  const transformed = history.map((row) => ({
+    ...row,
+    avatar_url: publicUrlFromPath(row.avatar_path),
+  }));
+
+  return res.json({ history: transformed });
+});
+
+/** POST /api/profile/restore { email, history_id } */
+router.post("/profile/restore", async (req, res) => {
+  // Restore a previous profile version from history
+  const { email, history_id } = req.body || {};
+  const normalized = String(email ?? "")
+    .trim()
+    .toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return res.status(400).json({ error: "Valid email is required" });
+  }
+  if (!Number.isInteger(history_id) || history_id <= 0) {
+    return res.status(400).json({ error: "Valid history_id is required" });
+  }
+
+  const { data: user, error: uErr } = await db
+    .from("users")
+    .select("user_id")
+    .eq("email", normalized)
+    .maybeSingle();
+  if (uErr) return res.status(500).json({ error: uErr.message });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  // Fetch the historical version
+  const { data: version, error: vErr } = await db
+    .from("profile_history")
+    .select("*")
+    .eq("history_id", history_id)
+    .eq("user_id", user.user_id)
+    .maybeSingle();
+  if (vErr) return res.status(500).json({ error: vErr.message });
+  if (!version) return res.status(404).json({ error: "Version not found" });
+
+  // Restore by updating profiles (this will trigger a new history entry automatically)
+  const { error: updErr } = await db
+    .from("profiles")
+    .update({
+      display_name: version.display_name,
+      username: version.username,
+      bio: version.bio,
+      avatar_path: version.avatar_path,
+      preferences: version.preferences,
+      idle_timeout_minutes: version.idle_timeout_minutes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", user.user_id);
+
+  if (updErr) return res.status(500).json({ error: updErr.message });
+
+  res.json({ ok: true });
 });
 
 export default router;

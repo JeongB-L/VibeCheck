@@ -27,6 +27,11 @@ export class ProfileSettings implements OnInit {
   savingBio = signal<boolean>(false);
   preferences = signal<string[]>([]);
 
+  // Profile History signals
+  profileHistory = signal<any[]>([]);
+  showProfileHistory = signal<boolean>(false);
+  loadingProfileHistory = signal<boolean>(false);
+
   constructor(private router: Router, private toastr: ToastrService) {}
 
   fullName = computed(() => {
