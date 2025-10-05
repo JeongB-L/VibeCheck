@@ -29,18 +29,18 @@
   </section>
 
   <section class="card">
+    <h2>Profile History</h2>
+    <p class="muted">View and restore previous versions of your profile.</p>
+    <button class="btn dark" (click)="goToProfileHistory()">View Profile History</button>
+  </section>
+
+  <section class="card">
     <h2>Account</h2>
     <p class="muted">
       Deactivate account will permanently remove your account and associated data (profiles,
       outings). This action cannot be undone.
     </p>
     <button class="danger-btn" (click)="deactivateAccount()">Deactivate account</button>
-  </section>
-
-  <section class="card">
-    <h2>Profile History</h2>
-    <p class="muted">View and restore previous versions of your profile.</p>
-    <button class="btn dark" (click)="goToProfileHistory()">View Profile History</button>
   </section>
 </main>
 

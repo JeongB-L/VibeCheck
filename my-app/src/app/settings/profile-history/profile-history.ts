@@ -42,6 +42,10 @@ export class ProfileHistory implements OnInit {
     this.loadProfileHistory();
   }
 
+  backHome() {
+    this.router.navigate(['/homepage']);
+  }
+
   async loadMe() {
     const res = await fetch(`${API}/api/profile/me?email=${encodeURIComponent(this.email())}`);
     const body = await res.json();

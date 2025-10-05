@@ -3,6 +3,7 @@
   max-width: 960px;
   margin: 24px auto;
   padding: 0 16px;
+  font-family: system-ui, sans-serif;
 }
 h1 {
   font-size: 24px;
@@ -23,19 +24,7 @@ h1 {
 .muted {
   color: #6b7280;
   margin: 0 0 12px;
-}
-
-.danger-btn {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.danger-btn:hover {
-  background: #fecaca;
+  font-size: 12px;
 }
 
 /* History styles */
@@ -47,8 +36,7 @@ h1 {
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 24px;
-  background: #f9fafb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: #fff;
 }
 .history-header {
   display: flex;
@@ -59,10 +47,11 @@ h1 {
 }
 .desc-box {
   margin-bottom: 12px;
-  padding: 8px;
-  background: #ffffff;
-  border: 1px solid #f3f4f6;
-  border-radius: 4px;
+  padding-left: 12px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  min-height: 120px;
 }
 .small {
   font-size: 14px;
@@ -72,8 +61,8 @@ h1 {
   margin-bottom: 12px;
 }
 .avatar-xs {
-  width: 150px;
-  height: 150px;
+  width: 180px;
+  height: 180px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid #e5e7eb;
@@ -94,7 +83,42 @@ h1 {
   background: #e5e7eb;
 }
 .empty-text {
-  text-align: center;
-  color: #9ca3af;
-  font-style: italic;
+  color: #6b7280;
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+/* Added from profile-settings.css for consistency */
+.signed-as {
+  display: grid;
+  gap: 6px;
+}
+.top-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.name {
+  font-weight: 700;
+  font-size: 18px;
+  color: #111827;
+}
+
+/* Preferences chips */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 13px;
+  color: #111827;
 }

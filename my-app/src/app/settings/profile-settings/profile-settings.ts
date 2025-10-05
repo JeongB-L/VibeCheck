@@ -3,14 +3,13 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { HeaderComponent } from '../../header/header';
-import { DatePipe } from '@angular/common'; // Add this for date formatting
 
 const API = 'http://localhost:3001';
 
 @Component({
   selector: 'app-profile-settings',
   standalone: true,
-  imports: [CommonModule, HeaderComponent, DatePipe], // Add DatePipe to imports
+  imports: [CommonModule, HeaderComponent],
   templateUrl: './profile-settings.html',
   styleUrl: './profile-settings.css',
 })

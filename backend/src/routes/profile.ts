@@ -145,12 +145,12 @@ router.post("/profile/avatar", uploadAvatar, async (req, res) => {
     // ensure row exists
     await ensureProfile(user.user_id);
 
-    // (optional) read current to delete later
-    const { data: current } = await db
-      .from("profiles")
-      .select("avatar_path")
-      .eq("user_id", user.user_id)
-      .maybeSingle();
+    // // (optional) read current to delete later  // Commented out to preserve old avatars for history
+    // const { data: current } = await db
+    //   .from("profiles")
+    //   .select("avatar_path")
+    //   .eq("user_id", user.user_id)
+    //   .maybeSingle();
 
     // upload new
     const newPath = await uploadAvatarToStorage(user.user_id, file);
@@ -164,13 +164,13 @@ router.post("/profile/avatar", uploadAvatar, async (req, res) => {
       .single();
     if (updErr) return res.status(500).json({ error: updErr.message });
 
-    // delete old (best-effort)
-    if (current?.avatar_path && current.avatar_path !== newPath) {
-      await db.storage
-        .from("avatars")
-        .remove([current.avatar_path])
-        .catch(() => {});
-    }
+    // // delete old (best-effort)  // Commented out to preserve old avatars for history
+    // if (current?.avatar_path && current.avatar_path !== newPath) {
+    //   await db.storage
+    //     .from("avatars")
+    //     .remove([current.avatar_path])
+    //     .catch(() => {});
+    // }
 
     const url = publicUrlFromPath(updated.avatar_path);
     console.log("[avatar] stored", { path: updated.avatar_path, url });
