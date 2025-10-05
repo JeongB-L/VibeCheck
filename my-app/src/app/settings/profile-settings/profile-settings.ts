@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { HeaderComponent } from '../../header/header';
+import { DatePipe } from '@angular/common'; // Add this for date formatting
 
 const API = 'http://localhost:3001';
 
 @Component({
   selector: 'app-profile-settings',
   standalone: true,
-  imports: [CommonModule, HeaderComponent],
+  imports: [CommonModule, HeaderComponent, DatePipe], // Add DatePipe to imports
   templateUrl: './profile-settings.html',
   styleUrl: './profile-settings.css',
 })
@@ -27,8 +28,9 @@ export class ProfileSettings implements OnInit {
   savingBio = signal<boolean>(false);
   preferences = signal<string[]>([]);
 
-  // previous profile versions
+  // Profile History signals
   profileHistory = signal<any[]>([]);
+  showProfileHistory = signal<boolean>(false);
   loadingProfileHistory = signal<boolean>(false);
 
   constructor(private router: Router, private toastr: ToastrService) {}
@@ -190,47 +192,6 @@ export class ProfileSettings implements OnInit {
         return;
       }
       this.toastr.success('Preferences saved.', 'Success');
-    } catch (e: any) {
-      this.toastr.error(e?.message ?? 'Network error', 'Error');
-    }
-  }
-
-  async loadProfileHistory() {
-    this.loadingProfileHistory.set(true);
-    try {
-      // get profile history by user email
-      const res = await fetch(
-        `${API}/api/profile/history?email=${encodeURIComponent(this.email())}`
-      );
-      const body = await res.json();
-      if (res.ok) {
-        this.profileHistory.set(body.history || []);
-      } else {
-        this.toastr.error(body?.error ?? 'Could not load history', 'Error');
-      }
-    } catch (e: any) {
-      this.toastr.error(e?.message ?? 'Network error', 'Error');
-    } finally {
-      this.loadingProfileHistory.set(false);
-    }
-  }
-
-  async restoreProfileVersion(historyId: number) {
-    if (!confirm('Restore this version? This will overwrite your current profile.')) return;
-    try {
-      const res = await fetch(`${API}/api/profile/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: this.email(), history_id: historyId }),
-      });
-      const body = await res.json();
-      if (res.ok) {
-        this.toastr.success('Profile restored.', 'Success');
-        this.loadMe(); // Reload current profile
-        this.loadProfileHistory(); // Refresh history
-      } else {
-        this.toastr.error(body?.error ?? 'Restore failed', 'Error');
-      }
     } catch (e: any) {
       this.toastr.error(e?.message ?? 'Network error', 'Error');
     }

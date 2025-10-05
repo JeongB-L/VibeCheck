@@ -10,6 +10,7 @@ import { Outings } from './outings/outings';
 import { ContactComponent } from './contact/contact';
 import { SettingsPage } from './settings/settings';
 import { OutingDetail } from './outings/outing-detail/outing-detail';
+import { ProfileHistory } from './settings/profile-history/profile-history';
 
 export const routes: Routes = [
   {
@@ -40,14 +41,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./settings/profile-settings/profile-settings').then((m) => m.ProfileSettings),
   },
-  { path: 'outings', 
-    component: Outings },
-    {
+  { path: 'outings', component: Outings },
+  {
     path: 'outings/:id',
-    component: OutingDetail
+    component: OutingDetail,
   },
-  { path: 'contact', 
-    component: ContactComponent },
-  { path: 'settings', 
-    component: SettingsPage },
+  { path: 'contact', component: ContactComponent },
+  { path: 'settings', component: SettingsPage },
+  { path: 'settings/profile-history', component: ProfileHistory },
 ];

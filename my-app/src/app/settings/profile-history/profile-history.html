@@ -1,0 +1,55 @@
+<app-header [showOutings]="true"></app-header>
+
+<!-- Top: Signed in as (similar to profile-settings) -->
+<section class="card signed-as">
+  <div class="top-row">
+    <span class="muted">Signed in as</span>
+    <span class="name">{{ fullName() || initial() }}</span>
+  </div>
+  <div class="email-row">
+    <span class="email">{{ email() }}</span>
+  </div>
+</section>
+
+<!-- Main: Profile History -->
+<section class="card">
+  <h2>Profile History</h2>
+  <div class="prefs-box">
+    <!-- Reusing prefs-box for similar styling -->
+    <p *ngIf="loadingProfileHistory()" class="empty-text">Loading history...</p>
+    <div
+      *ngIf="!loadingProfileHistory() && profileHistory().length; else noHistory"
+      class="history-container"
+    >
+      <div *ngFor="let ver of profileHistory()" class="history-box">
+        <div class="history-header">
+          <span class="name">Version from {{ ver.history_timestamp | date : 'medium' }}</span>
+          <span class="muted">({{ ver.history_operation }})</span>
+        </div>
+        <div class="desc-box muted">
+          <p *ngIf="ver.bio; else noBio">Bio: {{ ver.bio.substring(0, 100) }}...</p>
+          <ng-template #noBio><p>Bio: None</p></ng-template>
+          <div class="chips" *ngIf="ver.preferences?.length; else noPrefs">
+            <span class="chip" *ngFor="let p of ver.preferences">{{ p }}</span>
+          </div>
+          <ng-template #noPrefs>
+            <p class="muted small">Preferences: None</p>
+          </ng-template>
+        </div>
+        <p *ngIf="ver.username" class="muted small">Username: {{ ver.username }}</p>
+        <p *ngIf="ver.display_name" class="muted small">Display Name: {{ ver.display_name }}</p>
+        <div class="avatar-wrap tiny" *ngIf="ver.avatar_url">
+          <img [src]="ver.avatar_url" class="avatar-xs" alt="Avatar preview" />
+        </div>
+        <div class="actions">
+          <button class="btn light" (click)="restoreProfileVersion(ver.history_id)">
+            Restore this version
+          </button>
+        </div>
+      </div>
+    </div>
+    <ng-template #noHistory>
+      <p class="empty-text">No profile history available yet.</p>
+    </ng-template>
+  </div>
+</section>

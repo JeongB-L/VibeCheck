@@ -100,19 +100,5 @@
         <button class="btn dark full" (click)="savePrefs()">Save Preferences</button>
       </div>
     </div>
-
-    <section>
-      <h2>Profile History</h2>
-      <button (click)="loadProfileHistory()">Load History</button>
-      <ul *ngIf="!loadingProfileHistory()">
-        <li *ngFor="let ver of profileHistory()">
-          <p>Version from {{ ver.history_timestamp }} ({{ ver.history_operation }})</p>
-          <p>Bio preview: {{ ver.bio?.substring(0, 50) || 'None' }}...</p>
-          <!-- Add more previews as needed -->
-          <button (click)="restoreProfileVersion(ver.history_id)">Restore</button>
-        </li>
-      </ul>
-      <p *ngIf="loadingProfileHistory()">Loading...</p>
-    </section>
   </div>
 </section>
