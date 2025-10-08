@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { OutingDetail } from './outing-detail';
+import { HeaderComponent } from '../../header/header';
 
 describe('OutingDetail', () => {
   let component: OutingDetail;
@@ -8,9 +9,8 @@ describe('OutingDetail', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [OutingDetail]
-    })
-    .compileComponents();
+      imports: [OutingDetail],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(OutingDetail);
     component = fixture.componentInstance;
