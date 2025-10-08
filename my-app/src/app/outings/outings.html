@@ -19,7 +19,12 @@
   <!-- Right-side sheet -->
   <div class="sheet-backdrop" *ngIf="showForm" (click)="toggleForm()"></div>
 
-  <form class="sheet" *ngIf="showForm" (ngSubmit)="createOuting()" (click)="$event.stopPropagation()">
+  <form
+    class="sheet"
+    *ngIf="showForm"
+    (ngSubmit)="createOuting()"
+    (click)="$event.stopPropagation()"
+  >
     <div class="sheet-header">
       <h2>Create a outing</h2>
       <button type="button" class="sheet-close" (click)="toggleForm()">✕</button>
@@ -29,44 +34,54 @@
       <!-- Outing name -->
       <div class="field">
         <label for="title">Outing name</label>
-        <input id="title" type="text" [(ngModel)]="title" name="title" maxlength="80" required
-          placeholder="e.g., Hangout in Chicago" />
+        <input
+          id="title"
+          type="text"
+          [(ngModel)]="title"
+          name="title"
+          maxlength="80"
+          required
+          placeholder="e.g., Hangout in Chicago"
+        />
         <span class="hint">{{ title.length || 0 }}/80 max characters</span>
       </div>
 
       <!-- Destination -->
       <div class="field loc-field">
-  <label for="location">Destination</label>
+        <label for="location">Destination</label>
 
-  <div class="loc-input-wrap">
-    <input id="location" type="text"
-           [class.invalid]="locTouched && !selectedPlace"
-           [value]="location"
-           (input)="onLocationInput($any($event.target).value)"
-           (focus)="onLocFocus()"
-           (blur)="onLocBlur()"
-           (keydown)="onLocKeydown($event)"
-           placeholder="Where to?" autocomplete="off" required />
-  </div>
+        <div class="loc-input-wrap">
+          <input
+            id="location"
+            type="text"
+            [class.invalid]="locTouched && !selectedPlace"
+            [value]="location"
+            (input)="onLocationInput($any($event.target).value)"
+            (focus)="onLocFocus()"
+            (blur)="onLocBlur()"
+            (keydown)="onLocKeydown($event)"
+            placeholder="Where to?"
+            autocomplete="off"
+            required
+          />
+        </div>
 
-  <div class="loc-dropdown" *ngIf="locOpen">
-    <div class="loc-item" *ngFor="let s of locResults" (mousedown)="pickPlace(s)">
-      <div class="loc-texts">
-        <div class="loc-name">{{ s.name }}</div>
-        <div class="loc-addr">{{ s.address }}</div>
+        <div class="loc-dropdown" *ngIf="locOpen">
+          <div class="loc-item" *ngFor="let s of locResults" (mousedown)="pickPlace(s)">
+            <div class="loc-texts">
+              <div class="loc-name">{{ s.name }}</div>
+              <div class="loc-addr">{{ s.address }}</div>
+            </div>
+          </div>
+          <div class="loc-loading" *ngIf="locLoading">Searching…</div>
+          <div class="loc-empty" *ngIf="!locLoading && !locResults.length">No results</div>
+        </div>
+
+        <!-- ✅ Error belongs here -->
+        <div class="err" *ngIf="locTouched && !selectedPlace" role="alert" aria-live="polite">
+          Please select a destination from the suggestions.
+        </div>
       </div>
-    </div>
-    <div class="loc-loading" *ngIf="locLoading">Searching…</div>
-    <div class="loc-empty" *ngIf="!locLoading && !locResults.length">No results</div>
-  </div>
-
-  <!-- ✅ Error belongs here -->
-  <div class="err" *ngIf="locTouched && !selectedPlace" role="alert" aria-live="polite">
-    Please select a destination from the suggestions.
-  </div>
-</div>
-
-
 
       <!-- Dates -->
       <div class="row">
@@ -81,8 +96,6 @@
       </div>
     </div>
 
-
-
     <div class="sheet-actions">
       <button type="submit" [disabled]="isSubmitting">Create outing</button>
       <button type="button" class="ghost" (click)="toggleForm()">Cancel</button>
@@ -90,10 +103,15 @@
   </form>
 
   <div class="list">
-    <article class="card" *ngFor="let o of outings" (click)="goDetail(o.id)" role="button" tabindex="0">
+    <article
+      class="card"
+      *ngFor="let o of outings"
+      (click)="goDetail(o.id)"
+      role="button"
+      tabindex="0"
+    >
       <div class="thumb">
         <img [src]="coverSrc(o)" (error)="coverFallback($event, o.id)" alt="" />
-
       </div>
 
       <div class="content">
@@ -101,20 +119,26 @@
           <h3>{{ o.title }}</h3>
 
           <div class="menu-wrap">
-            <button class="icon-btn kebab" (click)="toggleMenu(o.id); $event.stopPropagation()">⋯</button>
+            <button class="icon-btn kebab" (click)="toggleMenu(o.id); $event.stopPropagation()">
+              ⋯
+            </button>
             <div class="menu" *ngIf="menuForId === o.id" (click)="$event.stopPropagation()">
               <button class="menu-item">Invite</button>
               <button class="menu-item" disabled>Share trip</button>
               <button class="menu-item" disabled>Make trip public</button>
               <button class="menu-item" disabled>Mark trip as completed</button>
               <hr />
-              <button class="menu-item danger" (click)="openDeleteConfirm(o, $event)">Delete</button>
+              <button class="menu-item danger" (click)="openDeleteConfirm(o, $event)">
+                Delete
+              </button>
             </div>
           </div>
         </div>
 
         <div class="meta">
-          <span class="meta-chip"><i class="fa-regular fa-calendar"></i>{{ o.start_date }} → {{ o.end_date }}</span>
+          <span class="meta-chip"
+            ><i class="fa-regular fa-calendar"></i>{{ o.start_date }} → {{ o.end_date }}</span
+          >
           <span class="meta-chip"><i class="fa-regular fa-map"></i> {{ o.location }}</span>
         </div>
       </div>
@@ -126,13 +150,20 @@
   <!-- Delete confirm modal -->
   <div class="modal-backdrop" *ngIf="confirmId !== null" (click)="closeDeleteConfirm()"></div>
 
-  <div class="modal" *ngIf="confirmId !== null" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+  <div
+    class="modal"
+    *ngIf="confirmId !== null"
+    role="dialog"
+    aria-modal="true"
+    (click)="$event.stopPropagation()"
+  >
     <button class="modal-x" (click)="closeDeleteConfirm()" aria-label="Close">✕</button>
 
     <h2 class="modal-title">Delete outing?</h2>
     <p class="modal-text">
-      Once you delete an outing, it can't be restored.
-      Are you sure you want to delete <strong>{{ confirmTitle || 'this trip' }}</strong>?
+      Once you delete an outing, it can't be restored. Are you sure you want to delete
+      <strong>{{ confirmTitle || 'this trip' }}</strong
+      >?
     </p>
 
     <div class="modal-actions">
@@ -140,5 +171,4 @@
       <button class="danger" (click)="confirmDelete()">Delete</button>
     </div>
   </div>
-
 </section>

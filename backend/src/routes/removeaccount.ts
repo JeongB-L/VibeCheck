@@ -46,6 +46,8 @@ router.delete("/account", async (req: any, res: any) => {
       .delete()
       .eq("user_id", userId);
 
+    // TODO: also delete any other user-related data in other tables
+
     if (delErr) return res.status(500).json({ error: delErr.message });
 
     return res.status(200).json({ message: "Account permanently deleted" });

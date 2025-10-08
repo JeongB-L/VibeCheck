@@ -11,6 +11,7 @@ import { ContactComponent } from './contact/contact';
 import { SettingsPage } from './settings/settings';
 import { OutingDetail } from './outings/outing-detail/outing-detail';
 import { ProfileHistory } from './settings/profile-history/profile-history';
+import { ChangePassword } from './settings/change-password/change-password';
 
 export const routes: Routes = [
   {
@@ -49,4 +50,5 @@ export const routes: Routes = [
   { path: 'contact', component: ContactComponent },
   { path: 'settings', component: SettingsPage },
   { path: 'settings/profile-history', component: ProfileHistory },
+  { path: 'settings/change-password', component: ChangePassword },
 ];
