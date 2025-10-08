@@ -108,39 +108,7 @@ router.post("/outings", async (req, res) => {
   }
 });
 
-// PUT /api/outings/:id  -> update basic fields
-router.put("/outings/:id", async (req, res) => {
-  try {
-    const { email, title, location, start_date, end_date } = req.body || {};
-    
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: "Valid email is required" });
-    }
 
-    const userId = await getUserIdFromEmail(email);
-    if (!userId) return res.status(401).json({ error: "User not found" });
-
-    const { id } = req.params;
-
-    const { data, error } = await db
-      .from("outings")
-      .update({
-        ...(title !== undefined && { title }),
-        ...(location !== undefined && { location }),
-        ...(start_date !== undefined && { start_date }),
-        ...(end_date !== undefined && { end_date }),
-      })
-      .eq("id", id)
-      .eq("creator_id", userId)
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ outing: data });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? "Server error" });
-  }
-});
 
 // DELETE /api/outings/:id  -> delete
 router.delete("/outings/:id", async (req, res) => {
@@ -165,5 +133,38 @@ router.delete("/outings/:id", async (req, res) => {
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
+
+
+// GET /api/outings/:id  -> fetch a single outing (scoped to the caller's email)
+router.get("/outings/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const email = String(req.query.email ?? "").trim().toLowerCase();
+
+    if (!id) return res.status(400).json({ error: "Invalid id" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+
+    const userId = await getUserIdFromEmail(email);
+    if (!userId) return res.status(401).json({ error: "User not found" });
+
+    const { data, error } = await db
+      .from("outings")
+      .select("*")
+      .eq("id", id)
+      .eq("creator_id", userId)
+      .maybeSingle();            // ← returns null when not found
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "Not found" });
+
+    return res.json({ outing: data });
+  } catch (e: any) {
+    console.error("GET /outings/:id error", e);
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
 
 export default router;

@@ -36,6 +36,20 @@ app.use("/api", apiRouter);
 
 app.use('/api', authGoogleRouter);
 
+// === Google Maps JS Loader Proxy ===
+const GOOGLE_PLACES_KEY = process.env.GOOGLE_PLACES_KEY!;
+if (!GOOGLE_PLACES_KEY) console.warn("⚠️ Missing GOOGLE_PLACES_KEY in .env");
+
+app.get("/api/maps-js", (req, res) => {
+  const libs = req.query.libraries || "maps,places";
+  const callback = req.query.callback || "";
+  const redirectUrl = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_PLACES_KEY}&libraries=${libs}${
+    callback ? `&callback=${callback}` : ""
+  }`;
+  res.redirect(redirectUrl);
+});
+
+
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
   console.log("====================================");

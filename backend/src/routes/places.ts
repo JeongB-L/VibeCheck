@@ -19,6 +19,8 @@ function headers(fieldMask: string) {
 }
 
 
+
+
 /** GET /api/places/autocomplete?q=paris */
 router.get("/autocomplete", async (req, res) => {
   const q = String(req.query.q ?? "").trim();
@@ -129,5 +131,134 @@ router.get("/cover", async (req, res) => {
     return res.status(500).send("server error");
   }
 });
+
+
+// GET /api/places/recommend?q=Chicago&type=food&limit=20
+router.get("/recommend", async (req, res) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q) return res.status(400).json({ error: "missing q" });
+
+    const typeParam = String(req.query.type ?? "").trim();   // "food" | "stay" | "do" | ""
+    const limit = Math.min(parseInt(String(req.query.limit ?? "10"), 10) || 10, 50);
+
+    // map UI tab → Places includedType
+    const mapType = (t: string) =>
+      t === "food" ? "restaurant" :
+      t === "stay" ? "lodging"  :
+      t === "do"   ? "tourist_attraction" : "";
+
+    // 1) City → lat/lng
+    const ts = await fetch(`${BASE}/places:searchText`, {
+      method: "POST",
+      headers: headers("places.location"),
+      body: JSON.stringify({
+        textQuery: q,
+        languageCode: "en",
+        includedType: "locality",
+      }),
+    });
+    if (!ts.ok) return res.status(502).json({ error: "searchText failed" });
+
+    const tsData = await ts.json() as {
+      places?: Array<{ location?: { latitude: number; longitude: number } }>;
+    };
+    const loc = tsData.places?.[0]?.location;
+    if (!loc) return res.json({ items: [], center: null });
+
+    const center = { lat: loc.latitude, lng: loc.longitude };
+
+    // ---- price helpers ----
+    const PRICE_MAP: Record<string, number> = {
+      PRICE_LEVEL_FREE: 0,
+      PRICE_LEVEL_INEXPENSIVE: 1,
+      PRICE_LEVEL_MODERATE: 2,
+      PRICE_LEVEL_EXPENSIVE: 3,
+      PRICE_LEVEL_VERY_EXPENSIVE: 4,
+    };
+    const priceTextFromLevel = (level?: string | null): string | null => {
+      if (!level) return null;
+      const tier = PRICE_MAP[level];
+      if (tier === undefined) return null;
+      if (tier === 0) return "Free";
+      return "$".repeat(tier); // 1→$, 2→$$, 3→$$$, 4→$$$$
+    };
+
+    // 2) Nearby helper — center must be { latitude, longitude }
+    const nearbyFor = async (includedType: string) => {
+      if (!includedType) return [];
+
+      const r = await fetch(`${BASE}/places:searchNearby`, {
+        method: "POST",
+        headers: headers(
+          "places.id,places.displayName,places.formattedAddress,places.location," +
+          "places.rating,places.userRatingCount,places.priceLevel,places.photos.name"
+        ),
+        body: JSON.stringify({
+          includedTypes: [includedType],
+          maxResultCount: limit,
+          locationRestriction: {
+            circle: {
+              center: { latitude: center.lat, longitude: center.lng },
+              radius: 2000,
+            },
+          },
+          languageCode: "en",
+        }),
+      });
+      if (!r.ok) return [];
+
+      const d = await r.json() as {
+        places?: Array<{
+          id?: string;
+          displayName?: { text?: string };
+          formattedAddress?: string;
+          location?: { latitude: number; longitude: number };
+          rating?: number;
+          userRatingCount?: number;
+          priceLevel?: string;
+          photos?: Array<{ name?: string }>;
+        }>;
+      };
+
+      return (d.places ?? []).map((p) => {
+        const photoName = p.photos?.[0]?.name ?? null;
+        // IMPORTANT: use encodeURI, not encodeURIComponent (keep slashes)
+        const photo = photoName
+          ? `${BASE}/${encodeURI(photoName)}/media?maxHeightPx=400&maxWidthPx=900&key=${API_KEY}`
+          : null;
+
+        const priceEnum = p.priceLevel ?? null;
+        const priceLevel = priceEnum ? (PRICE_MAP[priceEnum] ?? null) : null;
+        const priceText = priceTextFromLevel(priceEnum);
+
+        return {
+          id: p.id ?? "",
+          name: p.displayName?.text ?? "",
+          address: p.formattedAddress ?? "",
+          lat: p.location?.latitude ?? null,
+          lng: p.location?.longitude ?? null,
+          rating: p.rating ?? null,
+          userRatings: p.userRatingCount ?? 0,
+          priceLevel,             // 0..4 or null
+          priceText,              // "Free" | "$".."$$$$" | null
+          type: includedType,
+          photo,
+        };
+      });
+    };
+
+    const types = typeParam ? [mapType(typeParam)] : ["restaurant", "lodging", "tourist_attraction"];
+    const buckets = await Promise.all(types.map(nearbyFor));
+    const items = buckets.flat().filter(x => x.lat != null && x.lng != null);
+
+    res.json({ center, items });
+  } catch (e: any) {
+    console.error("recommend error:", e?.message || e);
+    res.status(500).json({ error: "Failed to fetch recommendations" });
+  }
+});
+
+
 
 export default router;

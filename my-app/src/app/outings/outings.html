@@ -36,39 +36,52 @@
 
       <!-- Destination -->
       <div class="field loc-field">
-        <label for="location">Destination</label>
+  <label for="location">Destination</label>
 
-        <div class="loc-input-wrap">
-          <input id="location" type="text" [value]="location"
-            (input)="onLocationInput($any($event.target).value)"
-            (blur)="onLocBlur()" placeholder="Where to?" autocomplete="off" required />
-        </div>
+  <div class="loc-input-wrap">
+    <input id="location" type="text"
+           [class.invalid]="locTouched && !selectedPlace"
+           [value]="location"
+           (input)="onLocationInput($any($event.target).value)"
+           (focus)="onLocFocus()"
+           (blur)="onLocBlur()"
+           (keydown)="onLocKeydown($event)"
+           placeholder="Where to?" autocomplete="off" required />
+  </div>
 
-        <div class="loc-dropdown" *ngIf="locOpen">
-          <div class="loc-item" *ngFor="let s of locResults" (mousedown)="pickPlace(s)">
-            <div class="loc-texts">
-              <div class="loc-name">{{ s.name }}</div>
-              <div class="loc-addr">{{ s.address }}</div>
-            </div>
-          </div>
-
-          <div class="loc-loading" *ngIf="locLoading">Searching…</div>
-          <div class="loc-empty" *ngIf="!locLoading && !locResults.length">No results</div>
-        </div>
-      </div>
-
-    <!-- Dates -->
-    <div class="row">
-      <div class="field">
-        <label for="start">Start date</label>
-        <input id="start" type="date" [(ngModel)]="start" name="start" required />
-      </div>
-      <div class="field">
-        <label for="end">End date</label>
-        <input id="end" type="date" [(ngModel)]="end" name="end" required />
+  <div class="loc-dropdown" *ngIf="locOpen">
+    <div class="loc-item" *ngFor="let s of locResults" (mousedown)="pickPlace(s)">
+      <div class="loc-texts">
+        <div class="loc-name">{{ s.name }}</div>
+        <div class="loc-addr">{{ s.address }}</div>
       </div>
     </div>
+    <div class="loc-loading" *ngIf="locLoading">Searching…</div>
+    <div class="loc-empty" *ngIf="!locLoading && !locResults.length">No results</div>
+  </div>
+
+  <!-- ✅ Error belongs here -->
+  <div class="err" *ngIf="locTouched && !selectedPlace" role="alert" aria-live="polite">
+    Please select a destination from the suggestions.
+  </div>
+</div>
+
+
+
+      <!-- Dates -->
+      <div class="row">
+        <div class="field">
+          <label for="start">Start date</label>
+          <input id="start" type="date" [(ngModel)]="start" name="start" required />
+        </div>
+        <div class="field">
+          <label for="end">End date</label>
+          <input id="end" type="date" [(ngModel)]="end" name="end" required />
+        </div>
+      </div>
     </div>
+
+
 
     <div class="sheet-actions">
       <button type="submit" [disabled]="isSubmitting">Create outing</button>
