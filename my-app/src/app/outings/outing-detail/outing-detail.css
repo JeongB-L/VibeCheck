@@ -1,0 +1,154 @@
+.detail-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1rem 2rem;
+}
+
+/* ---------- Header ---------- */
+.hdr {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.hdr h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.hdr .sub {
+    color: #666;
+    font-size: 0.95rem;
+}
+
+/* ---------- Layout ---------- */
+.layout {
+    display: flex;
+    align-items: flex-start;
+    /* ensures sticky works */
+    gap: 1.5rem;
+}
+
+/* Left column scrolls normally */
+.left {
+    flex: 1 1 60%;
+}
+
+/* Right column: sticky map */
+.right {
+    flex: 1 1 40%;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 1rem;
+    /* adjust if you have a fixed header */
+    align-self: flex-start;
+    height: fit-content;
+    /* ensures it doesn't stretch */
+}
+
+/* ---------- Tabs ---------- */
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tabs button {
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 9999px;
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tabs button.active {
+    background: #1e88e5;
+    color: white;
+    border-color: #1e88e5;
+}
+
+/* ---------- Cards ---------- */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* exactly two columns */
+  gap: 10px; /* space between cards */
+}
+.card {
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  padding: 0;                /* remove all white gaps */
+  margin: 0 auto 16px auto;  /* spacing between cards */
+  width: 100%;
+  max-width: 420px;          /* similar to TripAdvisor proportions */
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.card img {
+  width: 100%;
+  height: 220px;             /* bigger like TripAdvisor */
+  object-fit: cover;
+  display: block;
+  border: none;
+  margin: 0;
+}
+
+.card-body {
+  padding: 14px 18px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 6px;
+}
+
+.card-subtitle {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.card-rating {
+  color: #009688;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+
+.card:hover {
+    background: #f9fafb;
+    border-color: #ccc;
+}
+/* ---------- Map ---------- */
+.map {
+    width: 100%;
+    height: 620px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f9fafb;
+}
+
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}

@@ -50,6 +50,9 @@ export class Outings implements OnInit {
   locResults: PlaceLite[] = [];
   private locQuery$ = new Subject<string>();
 
+  selectedPlace: PlaceLite | null = null;
+  locTouched = false;
+
   constructor(private toast: ToastrService, private router: Router, public places: PlacesService) { }
 
   goDetail(id: number) { this.router.navigate(['/outings', id]); }
@@ -131,6 +134,8 @@ export class Outings implements OnInit {
   public onLocationInput(v: string) {
     this.location = v;
     this.locOpen = !!v;
+    this.locTouched = true;
+    this.selectedPlace = null;  
     this.locQuery$.next(v);
   }
 
@@ -139,13 +144,22 @@ export class Outings implements OnInit {
   }
 
   public onLocBlur(): void {
+    this.locTouched = true;
     // let click on a suggestion register
     window.setTimeout(() => (this.locOpen = false), 150);
   }
+    public onLocKeydown(ev: KeyboardEvent) {
+    if (ev.key === 'Enter' && this.locOpen && this.locResults.length) {
+      ev.preventDefault();
+      this.pickPlace(this.locResults[0]);
+    }
+  }
 
   pickPlace(p: PlaceLite) {
+    this.selectedPlace = p;
     this.location = p.name;                  // or `${p.name}, ${p.address}` // ADD
     this.locOpen = false;
+    this.locTouched = true;
     // If you want to persist coordinates/placeId later, store them here
     // this.selectedPlaceId = p.id;
     // this.selectedLat = p.lat; this.selectedLng = p.lng;
@@ -219,6 +233,15 @@ coverFallback(ev: Event, id: number) {
       this.toast.error('Not signed in', 'Create Outing');
       return;
     }
+
+     // enforce selection from autocomplete
+    if (!this.selectedPlace) {
+      this.toast.warning('Please choose a destination from the suggestions.', 'Create Outing');
+      // focus the field
+      document.getElementById('location')?.focus();
+      this.locTouched = true;
+      return;
+    }
     if (!this.title.trim() || !this.location.trim() || !this.validDates()) {
       this.toast.warning('Fill all fields with valid dates', 'Create Outing');
       return;
@@ -235,6 +258,8 @@ coverFallback(ev: Event, id: number) {
           location: this.location.trim(),
           start_date: this.start,
           end_date: this.end,
+          // if you later want to store richer data:
+          // place_id: this.selectedPlace.id, lat: this.selectedPlace.lat, lng: this.selectedPlace.lng
         }),
       });
 
@@ -243,6 +268,9 @@ coverFallback(ev: Event, id: number) {
 
       this.toast.success('Outing created');
       this.title = this.location = this.start = this.end = '';
+       this.selectedPlace = null;
+       this.locResults = [];
+      this.locTouched = false;
       this.showForm = false;
       await this.fetchOutings();
     } catch (e: any) {
