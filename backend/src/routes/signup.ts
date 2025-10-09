@@ -9,6 +9,10 @@ const router = Router();
 // small helper copied from your file
 function passwordPolicyError(pw: string | undefined): string | null {
   if (!pw || pw.trim().length === 0) return "Password cannot be empty";
+   if (pw.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(pw)) return 'Password must include an uppercase letter';
+ if (!/[a-z]/.test(pw)) return 'Password must include a lowercase letter';
+ if (!/[0-9]/.test(pw)) return 'Password must include a number';
   return null;
 }
 

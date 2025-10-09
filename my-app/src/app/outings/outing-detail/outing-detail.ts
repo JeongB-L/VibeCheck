@@ -11,8 +11,10 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HeaderComponent } from '../../header/header';
+import { ToastrService } from 'ngx-toastr';
 
 const API = 'http://localhost:3001';
+
 
 // google maps global (loaded by a <script> in index.html)
 declare const google: any;
@@ -55,6 +57,9 @@ type TabKey = 'food' | 'stay' | 'do';
   styleUrls: ['./outing-detail.css'],
 })
 export class OutingDetail implements OnInit, AfterViewInit {
+
+  constructor(private toast: ToastrService) { }
+
   trackById(_i: number, item: RecItem) {
     return item.id;
   }
@@ -164,6 +169,13 @@ export class OutingDetail implements OnInit, AfterViewInit {
         o.location
       )}&type=${serverType}&limit=20`;
       const res = await fetch(url);
+
+       if (!res.ok) {
+      this.toast.error("Failed to load recommendations (server error).");
+      this.items.set([]); // clear list
+      return;
+    }
+
       const data = (await res.json()) as RecResp;
 
       this.items.set(data.items ?? []);
@@ -174,7 +186,12 @@ export class OutingDetail implements OnInit, AfterViewInit {
         this.renderMarkers();
         this.fitMapBounds(data);
       }, 0);
-    } finally {
+    } catch(err:any) {
+      this.items.set([]);
+      this.toast.error('Failed to load recommendations: ' + (err?.message || 'Unknown error'));
+
+
+    }finally {
       this.loading.set(false);
     }
   }
