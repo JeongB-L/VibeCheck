@@ -46,7 +46,10 @@
       Deactivate account will permanently remove your account and associated data (profiles,
       outings). This action cannot be undone.
     </p>
-    <button class="danger-btn" (click)="deactivateAccount()">Deactivate account</button>
+    <div style="display: flex; gap: 1rem;">
+      <button class="secondary-btn" (click)="softDeactivateAccount()">Deactivate account</button>
+      <button class="danger-btn" (click)="deactivateAccount()">Delete account</button>
+    </div>
   </section>
 </main>
 

@@ -163,4 +163,32 @@ export class SettingsPage implements OnInit {
       alert('Network error while deleting account.');
     }
   }
+  async softDeactivateAccount() {
+    if (!confirm('Deactivate your account? You can reactivate later by signing in.')) return;
+
+    try {
+      const resp = await fetch('http://localhost:3001/api/account/deactivate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': this.userId,
+        },
+        body: JSON.stringify({ reason: 'user_deactivated' }), 
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data?.error || 'Failed to deactivate account.');
+        return;
+      }
+
+      alert('Your account has been deactivated. You’ll need to reactivate to use the app again.');
+
+      sessionStorage.clear();
+      this.router.navigate(['/login']);
+    } catch (e) {
+      alert('Network error while deactivating account.');
+    }
+  }
+  
 }

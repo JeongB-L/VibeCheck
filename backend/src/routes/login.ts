@@ -20,14 +20,20 @@ router.post("/login", async (req, res) => {
     const normalized = email.trim().toLowerCase();
     const { data: user, error } = await supabaseClient
       .from("users")
-      .select("user_id, email, password_hash, email_verified, first_name")
+      .select("user_id, email, password_hash, email_verified, first_name, status")
       .eq("email", normalized)
       .single();
 
     if (error || !user || !user.password_hash) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
-
+    
+    if (user.status === "DEACTIVATED") {
+      return res.status(401).json({
+        error: "Account is deactivated",
+        code: "ACCOUNT_DEACTIVATED",
+      });
+    }
     
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {

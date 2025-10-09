@@ -5,6 +5,7 @@ import path from "path";
 import apiRouter from "./routes";
 import authGoogleRouter from './routes/auth-google';
 import placesRouter from "./routes/places";
+import accountRouter from "./routes/account";
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -48,6 +49,9 @@ app.get("/api/maps-js", (req, res) => {
   }`;
   res.redirect(redirectUrl);
 });
+
+app.use("/api/account", accountRouter);
+
 
 
 // ---- SINGLE app.listen ----

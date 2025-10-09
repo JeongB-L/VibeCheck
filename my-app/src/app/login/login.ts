@@ -20,6 +20,7 @@ export class Login implements AfterViewInit {
   email = '';
   password = '';
   constructor(private router: Router, private toastr: ToastrService) {}
+  private triedReactivation = false;
 
   async onLogin() {
     try {
@@ -42,9 +43,36 @@ export class Login implements AfterViewInit {
           this.router.navigate(['/verify'], {
             queryParams: { email: body?.user?.email ?? this.email.trim().toLowerCase() },
           });
-        } else {
-          this.toastr.error(body?.error ?? 'Login failed', 'Error');
-        }
+        } else if (body?.code === 'ACCOUNT_DEACTIVATED' && !this.triedReactivation) {
+            const ok = confirm('Your account is deactivated. Reactivate now using the info you just entered?');
+            if (ok) {
+              try {
+                const rx = await fetch('http://localhost:3001/api/account/reactivate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: this.email.trim().toLowerCase(),
+                    password: this.password,
+                  }),
+                  credentials: 'include',
+                });
+                const rxBody = await rx.json().catch(() => ({}));
+                if (rx.ok) {
+                  this.triedReactivation = true;   // avoid loops
+                    this.triedReactivation = true;
+                    await this.onLogin();   
+                    return;                 
+                } else {
+                  this.toastr.error(rxBody?.error ?? 'Reactivation failed', 'Error');
+                }
+              } catch (e: any) {
+                this.toastr.error(e?.message ?? String(e), 'Network error');
+              }
+            }
+          } else {
+            this.toastr.error(body?.error ?? 'Login failed', 'Error');
+          }
+
         return;
       }
 
