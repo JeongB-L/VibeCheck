@@ -1,0 +1,57 @@
+<app-header></app-header>
+
+<main class="container">
+  <h1>Settings</h1>
+
+  <!-- Inactivity timeout setting -->
+  <section class="card">
+    <h2>Inactivity timeout</h2>
+    <p class="muted">Automatically log out after this period with no activity.</p>
+
+    <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0 12px">
+      <input
+        type="number"
+        min="1"
+        max="720"
+        [value]="timeoutMinutes() ?? ''"
+        [disabled]="timeoutMinutes() === null"
+        (input)="onTimeoutInput($any($event.target).value)"
+        class="pref-input"
+        style="width: 120px"
+      />
+      <span>minute(s)</span>
+      <button class="btn dark" [disabled]="timeoutMinutes() === null" (click)="saveTimeout()">
+        Save
+      </button>
+    </div>
+
+    <p class="muted small" *ngIf="timeoutMinutes() === null">Loading from server…</p>
+  </section>
+
+  <section class="card">
+    <h2>Profile History</h2>
+    <p class="muted">View and restore previous versions of your profile.</p>
+    <button class="btn dark" (click)="goToProfileHistory()">View Profile History</button>
+  </section>
+
+  <section class="card">
+    <h2>Change Password</h2>
+    <p class="muted">Change your password for better security</p>
+    <button class="btn dark" (click)="goToPasswordChange()">Click Here!</button>
+  </section>
+
+  <section class="card">
+    <h2>Account</h2>
+    <p class="muted">
+      Deactivate account will permanently remove your account and associated data (profiles,
+      outings). This action cannot be undone.
+    </p>
+    <div style="display: flex; gap: 1rem;">
+      <button class="secondary-btn" (click)="softDeactivateAccount()">Deactivate account</button>
+      <button class="danger-btn" (click)="deactivateAccount()">Delete account</button>
+    </div>
+  </section>
+</main>
+
+<!-- click-away -->
+<div class="scrim" *ngIf="menuOpen()" (click)="closeMenu()"></div>

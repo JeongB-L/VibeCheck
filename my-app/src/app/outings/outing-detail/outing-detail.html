@@ -1,0 +1,48 @@
+<app-header></app-header>
+
+<div class="detail-wrap" *ngIf="outing() as o">
+  <header class="hdr">
+    <h1>{{ o.title }}</h1>
+    <div class="sub">{{ o.location }} • {{ o.start_date }} → {{ o.end_date }}</div>
+  </header>
+
+  <div class="layout">
+    <section class="left">
+      <nav class="tabs">
+        <button [class.active]="tab() === 'food'" (click)="loadTab('food')">Food & drink</button>
+        <button [class.active]="tab() === 'stay'" (click)="loadTab('stay')">Places to stay</button>
+        <button [class.active]="tab() === 'do'" (click)="loadTab('do')">Things to do</button>
+      </nav>
+
+      <div class="cards">
+        <article
+          class="card"
+          *ngFor="let p of items(); trackBy: trackById"
+          [class.active]="selectedId() === p.id"
+          (mouseenter)="hoverItem(p)"
+          (mouseleave)="hoverItem(null)"
+          (click)="openInMaps(p)"
+        >
+          <img
+            *ngIf="p.photo"
+            [src]="p.photo"
+            alt=""
+            class="thumb"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+          />
+          <div class="card-body">
+            <div class="card-title">{{ p.name }}</div>
+            <div class="card-subtitle">{{ p.address }}</div>
+            <div class="card-rating">★ {{ p.rating?.toFixed(1) }} {{ p.priceText }}</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- right: map (plain JS) -->
+    <section class="right" *ngIf="isBrowser && showMap()">
+      <div #mapEl class="map"></div>
+    </section>
+  </div>
+</div>

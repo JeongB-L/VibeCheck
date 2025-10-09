@@ -1,0 +1,85 @@
+<!-- src/app/signup/signup.html -->
+<div class="split">
+  <section class="half form-side">
+    <div class="card">
+      <img src="assets/vibechecklogo.png" alt="VibeCheck logo" class="logo" />
+
+      <h1 class="title">Create account</h1>
+
+      <form (ngSubmit)="onSignup()" novalidate>
+        <div class="field">
+          <label for="first_name">First name</label>
+          <input id="first_name" name="first_name" [(ngModel)]="firstName" required />
+        </div>
+
+        <div class="field">
+          <label for="last_name">Last name</label>
+          <input id="last_name" name="last_name" [(ngModel)]="lastName" required />
+        </div>
+
+        <div class="field">
+          <label for="date_of_birth">Date of birth</label>
+          <input id="date_of_birth" name="date_of_birth" type="date" [(ngModel)]="dob" required />
+        </div>
+
+        <div class="field">
+          <label for="gender">Gender</label>
+          <select id="gender" name="gender" [(ngModel)]="gender">
+            <option value="" selected>Prefer not to say</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Non-binary</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            [(ngModel)]="email"
+            required
+            placeholder="you@example.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            [(ngModel)]="password"
+            required
+            placeholder="••••••••"
+            autocomplete="new-password"
+          />
+          <small class="hint">Use 8+ characters with uppercase, lowercase, and number.</small>
+        </div>
+
+        <button type="submit" [disabled]="loading" aria-busy="{{ loading }}">
+          {{ loading ? 'Signing up…' : 'Sign up' }}
+        </button>
+      </form>
+
+      <p class="meta">
+        Already have an account?
+        <a routerLink="/login">Log in</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="half text-side">
+    <div class="copy">
+      <h2>Join VibeCheck</h2>
+      <p>Create your account to get started.</p>
+      <p class="meta">
+        Need help?
+        <a routerLink="/contact" class="contact-link">Contact us</a>
+      </p>
+    </div>
+  </section>
+</div>

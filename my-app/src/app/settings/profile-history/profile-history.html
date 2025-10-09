@@ -1,0 +1,51 @@
+<app-header></app-header>
+
+<div class="container">
+  <h1>Profile History</h1>
+
+  <div *ngIf="loadingProfileHistory()" class="muted">Loading history...</div>
+
+  <div class="history-container">
+    <div *ngFor="let ver of profileHistory()" class="card history-box">
+      <div class="history-header">Version from {{ ver.history_timestamp | date : 'medium' }}</div>
+
+      <div class="desc-box small">
+        Bio:
+        <ng-container *ngIf="ver.bio; else noBio">
+          {{ ver.bio }}
+        </ng-container>
+        <ng-template #noBio> None </ng-template>
+      </div>
+
+      <div class="desc-box small">
+        Preferences:
+        <ng-container *ngIf="ver.preferences?.length > 0; else noPrefs">
+          <div class="chips">
+            <span *ngFor="let p of ver.preferences" class="chip">
+              {{ p }}
+            </span>
+          </div>
+        </ng-container>
+        <ng-template #noPrefs>
+          <div class="empty-text">None</div>
+        </ng-template>
+      </div>
+
+      Profile Picture:
+
+      <div *ngIf="ver.avatar_url" class="avatar-wrap tiny">
+        <img [src]="ver.avatar_url" alt="Avatar" class="avatar-xs" />
+      </div>
+
+      <div class="actions">
+        <button class="btn light" (click)="restoreProfileVersion(ver.history_id)">
+          Restore this version
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="!profileHistory().length && !loadingProfileHistory()" class="empty-text">
+      No profile history available yet.
+    </div>
+  </div>
+</div>
