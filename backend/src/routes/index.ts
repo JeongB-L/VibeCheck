@@ -7,6 +7,7 @@ import resetPasswordRouter from "./reset-password";
 import profileRouter from "./profile";
 import outingRouter from "./outing";
 import removeAccountRouter from "./removeaccount";
+import updatePassword from "./password-update";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use(resetPasswordRouter); // POST /reset_password
 router.use(profileRouter); // GET /api/profile/me, PATCH /api/profile
 router.use(outingRouter);
 router.use(removeAccountRouter); // DELETE /api/account
+router.use(updatePassword); // POST /update_password
 
 export default router;

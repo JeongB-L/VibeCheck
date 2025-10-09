@@ -124,6 +124,10 @@ export class SettingsPage implements OnInit {
     this.router.navigate(['/settings/profile-history']);
   }
 
+  goToPasswordChange() {
+    this.router.navigate(['/settings/change-password']);
+  }
+
   // destructive action
   async deactivateAccount() {
     // NOTE: per your requirement, this performs a HARD DELETE

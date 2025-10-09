@@ -1,11 +1,20 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import {
-  Component, OnInit, AfterViewInit, ViewChild, ElementRef,
-  inject, signal, PLATFORM_ID
+  Component,
+  OnInit,
+  AfterViewInit,
+  ViewChild,
+  ElementRef,
+  inject,
+  signal,
+  PLATFORM_ID,
 } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
+import { HeaderComponent } from '../../header/header';
+import { ToastrService } from 'ngx-toastr';
 
 const API = 'http://localhost:3001';
+
 
 // google maps global (loaded by a <script> in index.html)
 declare const google: any;
@@ -27,12 +36,11 @@ type RecItem = {
   lat: number;
   lng: number;
   rating?: number;
-  priceLevel?: number;  // 0..4 or null
-  priceText?: string | null;   // "Free" | "$".."$$$$"
+  priceLevel?: number; // 0..4 or null
+  priceText?: string | null; // "Free" | "$".."$$$$"
   type?: string;
   photo?: string | null;
 };
-
 
 type RecResp = {
   center: { lat: number; lng: number } | null;
@@ -44,11 +52,13 @@ type TabKey = 'food' | 'stay' | 'do';
 @Component({
   standalone: true,
   selector: 'app-outing-detail',
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, HeaderComponent],
   templateUrl: './outing-detail.html',
   styleUrls: ['./outing-detail.css'],
 })
 export class OutingDetail implements OnInit, AfterViewInit {
+
+  constructor(private toast: ToastrService) { }
 
   trackById(_i: number, item: RecItem) {
     return item.id;
@@ -91,7 +101,9 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
   private makePin(color: string, scale = 1) {
     const svg = encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="${22 * scale}" height="${33 * scale}" viewBox="0 0 28 42">
+    <svg xmlns="http://www.w3.org/2000/svg" width="${22 * scale}" height="${
+      33 * scale
+    }" viewBox="0 0 28 42">
       <path fill="${color}" opacity="0.85" d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 28 14 28s14-17.5 14-28C28 6.27 21.73 0 14 0z"/>
       <circle cx="14" cy="14" r="${4.5 * scale}" fill="white"/>
     </svg>`);
@@ -125,7 +137,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
     const start = Date.now();
     while (!(window as any).google?.maps?.Map) {
       if (Date.now() - start > maxMs) throw new Error('Maps JS not loaded');
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
     }
   }
 
@@ -153,8 +165,17 @@ export class OutingDetail implements OnInit, AfterViewInit {
     const serverType = key === 'food' ? 'food' : key === 'stay' ? 'stay' : 'do';
 
     try {
-      const url = `${API}/api/places/recommend?q=${encodeURIComponent(o.location)}&type=${serverType}&limit=20`;
+      const url = `${API}/api/places/recommend?q=${encodeURIComponent(
+        o.location
+      )}&type=${serverType}&limit=20`;
       const res = await fetch(url);
+
+       if (!res.ok) {
+      this.toast.error("Failed to load recommendations (server error).");
+      this.items.set([]); // clear list
+      return;
+    }
+
       const data = (await res.json()) as RecResp;
 
       this.items.set(data.items ?? []);
@@ -165,8 +186,12 @@ export class OutingDetail implements OnInit, AfterViewInit {
         this.renderMarkers();
         this.fitMapBounds(data);
       }, 0);
+    } catch(err:any) {
+      this.items.set([]);
+      this.toast.error('Failed to load recommendations: ' + (err?.message || 'Unknown error'));
 
-    } finally {
+
+    }finally {
       this.loading.set(false);
     }
   }
@@ -177,9 +202,9 @@ export class OutingDetail implements OnInit, AfterViewInit {
       this.gmap = new google.maps.Map(this.mapEl.nativeElement, this.mapOptions);
 
       // init icons + infowindow once
-      if (!this.iconDefault) this.iconDefault = this.makePin('#d32f2f', 0.9);  // smaller red
-      if (!this.iconActive) this.iconActive = this.makePin('#1976d2', 1.2);  // bright blue, slightly larger
-      if (!this.iconDimmed) this.iconDimmed = this.makePin('#aaaaaa', 0.8);  // gray dimmed
+      if (!this.iconDefault) this.iconDefault = this.makePin('#d32f2f', 0.9); // smaller red
+      if (!this.iconActive) this.iconActive = this.makePin('#1976d2', 1.2); // bright blue, slightly larger
+      if (!this.iconDimmed) this.iconDimmed = this.makePin('#aaaaaa', 0.8); // gray dimmed
 
       if (!this.info) this.info = new google.maps.InfoWindow();
     }
@@ -228,37 +253,36 @@ export class OutingDetail implements OnInit, AfterViewInit {
   }
 
   private setActiveMarker(id: string | null) {
-  for (const m of this.gmarkers) {
-    const active = ((m as any).__id === id);
-    if (active) {
-      m.setIcon(this.iconActive);
-      m.setZIndex(1000);
-      m.setOpacity(1);
-    } else {
-      m.setIcon(this.iconDefault);
-      m.setZIndex(1);
-      m.setOpacity(id ? 0.45 : 1); // dim others when one is active
+    for (const m of this.gmarkers) {
+      const active = (m as any).__id === id;
+      if (active) {
+        m.setIcon(this.iconActive);
+        m.setZIndex(1000);
+        m.setOpacity(1);
+      } else {
+        m.setIcon(this.iconDefault);
+        m.setZIndex(1);
+        m.setOpacity(id ? 0.45 : 1); // dim others when one is active
+      }
     }
-  }
 
-  // Info window content
-  if (id) {
-    const m = this.markerById.get(id);
-    if (m && this.info) {
-      const item = this.items().find(x => x.id === id);
-      this.info.setContent(
-        `<div style="font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto;">
+    // Info window content
+    if (id) {
+      const m = this.markerById.get(id);
+      if (m && this.info) {
+        const item = this.items().find((x) => x.id === id);
+        this.info.setContent(
+          `<div style="font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto;">
            <div><strong>${item?.name ?? ''}</strong></div>
            <div style="color:#666;margin-top:2px">${item?.address ?? ''}</div>
          </div>`
-      );
-      this.info.open({ anchor: m, map: this.gmap, shouldFocus: false });
+        );
+        this.info.open({ anchor: m, map: this.gmap, shouldFocus: false });
+      }
+    } else {
+      if (this.info) this.info.close();
     }
-  } else {
-    if (this.info) this.info.close();
   }
-}
-
 
   // ---------- UI handlers ----------
   hoverItem(p: RecItem | null) {
