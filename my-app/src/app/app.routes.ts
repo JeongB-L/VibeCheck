@@ -12,6 +12,7 @@ import { SettingsPage } from './settings/settings';
 import { OutingDetail } from './outings/outing-detail/outing-detail';
 import { ProfileHistory } from './settings/profile-history/profile-history';
 import { ChangePassword } from './settings/change-password/change-password';
+import { FriendsPage } from './friends/friends';
 
 export const routes: Routes = [
   {
@@ -51,4 +52,5 @@ export const routes: Routes = [
   { path: 'settings', component: SettingsPage },
   { path: 'settings/profile-history', component: ProfileHistory },
   { path: 'settings/change-password', component: ChangePassword },
+  { path: 'friends', component: FriendsPage },
 ];
