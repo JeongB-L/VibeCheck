@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HeaderComponent } from '../header/header';
+import { ToastrService } from 'ngx-toastr';
 
 type Tab = 'current' | 'search' | 'pending';
 
@@ -41,7 +42,7 @@ export class FriendsPage implements OnInit {
   searchEmail = signal<string>('');
   adding = signal(false);
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private toastr: ToastrService) {}
 
   async ngOnInit() {
     if (!this.meEmail) {
@@ -71,6 +72,7 @@ export class FriendsPage implements OnInit {
       this.friends.set(body?.friends || []);
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
+      this.toastr.error(this.errorMsg()!, 'Friends');
     } finally {
       this.loading.set(false);
     }
@@ -84,6 +86,7 @@ export class FriendsPage implements OnInit {
       this.incoming.set(body?.incoming || []);
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
+      this.toastr.error(this.errorMsg()!, 'Pending requests');
     }
   }
 
@@ -95,6 +98,7 @@ export class FriendsPage implements OnInit {
       this.outgoing.set(body?.outgoing || []);
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
+      this.toastr.error(this.errorMsg()!, 'Outgoing requests');
     }
   }
 
@@ -120,11 +124,12 @@ export class FriendsPage implements OnInit {
         // became friends immediately (mutual requests)
         await this.loadFriends();
         this.tab.set('current');
+        this.toastr.success(`You're now friends with ${f}.`, 'Friend request accepted');
       } else {
         // normal pending outgoing
         await this.loadOutgoing();
         this.tab.set('pending');
-        alert(`Friend request sent to ${f}.`);
+        this.toastr.success(`Friend request sent to ${f}.`, 'Request sent');
       }
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
@@ -146,6 +151,7 @@ export class FriendsPage implements OnInit {
         throw new Error(b?.error || 'Could not remove friend');
       }
       await this.loadFriends();
+      this.toastr.info(`Removed ${friendEmail} from your friends.`, 'Friend removed');
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
     }
@@ -161,7 +167,7 @@ export class FriendsPage implements OnInit {
       const b = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(b?.error || 'Failed to accept');
       await Promise.all([this.loadFriends(), this.loadPending()]);
-      alert(`You and ${email} are now friends.`);
+      this.toastr.success(`You and ${email} are now friends.`, 'Request accepted');
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
     }
@@ -181,6 +187,9 @@ export class FriendsPage implements OnInit {
       await this.loadPending();
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
+    } finally {
+      await this.loadPending();
+      this.toastr.info(`Declined request from ${email}.`, 'Request declined');
     }
   }
 
@@ -196,6 +205,7 @@ export class FriendsPage implements OnInit {
         throw new Error(b?.error || 'Failed to cancel request');
       }
       await this.loadOutgoing();
+      this.toastr.info(`Canceled request to ${email}.`, 'Request canceled');
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
     }
