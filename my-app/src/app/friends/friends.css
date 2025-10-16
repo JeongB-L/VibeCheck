@@ -192,3 +192,19 @@ h1 {
   color: #6b7280;
   font-size: 12px;
 }
+
+.clickable {
+  cursor: pointer;
+}
+.linklike {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #1f2937;
+  text-align: left;
+  font: inherit;
+}
+.linklike:hover {
+  text-decoration: underline;
+}

@@ -213,4 +213,9 @@ export class FriendsPage implements OnInit {
       img.src = this.defaultAvatar;
     }
   }
+
+  // view user profile
+  viewUser(u: { user_id: string }) {
+    this.router.navigate(['/users', u.user_id]);
+  }
 }

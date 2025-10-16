@@ -36,11 +36,13 @@
 
     <ul class="list" *ngIf="friends().length">
       <li class="friend" *ngFor="let f of friends(); let i = index">
-        <div class="avatar-box">
+        <div class="avatar-box clickable" (click)="viewUser(f)">
           <img [src]="avatarUrl(f)" alt="" class="avatar-img" (error)="onImgError($event)" />
         </div>
         <div class="meta">
-          <div class="name">{{ f.display_name || f.name || f.email }}</div>
+          <button class="linklike name" (click)="viewUser(f)">
+            {{ f.display_name || f.name || f.email }}
+          </button>
           <div class="sub">{{ f.email }}</div>
         </div>
         <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
@@ -73,11 +75,13 @@
     <div *ngIf="!incoming().length" class="muted">No incoming requests.</div>
     <ul class="list" *ngIf="incoming().length">
       <li class="friend" *ngFor="let u of incoming(); let i = index">
-        <div class="avatar-box">
+        <div class="avatar-box clickable" (click)="viewUser(u)">
           <img [src]="avatarUrl(u)" alt="" class="avatar-img" (error)="onImgError($event)" />
         </div>
         <div class="meta">
-          <div class="name">{{ u.display_name || u.name || u.email }}</div>
+          <button class="linklike name" (click)="viewUser(u)">
+            {{ u.display_name || u.name || u.email }}
+          </button>
           <div class="sub">{{ u.email }}</div>
         </div>
         <div class="actions-row">
@@ -94,11 +98,13 @@
     <div *ngIf="!outgoing().length" class="muted">No outgoing requests.</div>
     <ul class="list" *ngIf="outgoing().length">
       <li class="friend" *ngFor="let u of outgoing(); let i = index">
-        <div class="avatar-box">
+        <div class="avatar-box clickable" (click)="viewUser(u)">
           <img [src]="avatarUrl(u)" alt="" class="avatar-img" (error)="onImgError($event)" />
         </div>
         <div class="meta">
-          <div class="name">{{ u.display_name || u.name || u.email }}</div>
+          <button class="linklike name" (click)="viewUser(u)">
+            {{ u.display_name || u.name || u.email }}
+          </button>
           <div class="sub">Request sent — {{ u.email }}</div>
         </div>
         <button class="ghost" (click)="cancel(u.email)">Cancel</button>

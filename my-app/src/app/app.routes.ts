@@ -13,6 +13,7 @@ import { OutingDetail } from './outings/outing-detail/outing-detail';
 import { ProfileHistory } from './settings/profile-history/profile-history';
 import { ChangePassword } from './settings/change-password/change-password';
 import { FriendsPage } from './friends/friends';
+import { UserProfilePage } from './user-profile/user-profile';
 
 export const routes: Routes = [
   {
@@ -53,4 +54,5 @@ export const routes: Routes = [
   { path: 'settings/profile-history', component: ProfileHistory },
   { path: 'settings/change-password', component: ChangePassword },
   { path: 'friends', component: FriendsPage },
+  { path: 'users/:id', component: UserProfilePage }, // this is the view only user profile from friends page
 ];
