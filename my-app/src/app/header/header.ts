@@ -51,4 +51,9 @@ export class HeaderComponent {
     this.closeMenu();
     this.router.navigate(['/login']);
   }
+
+  goFriends() {
+    this.closeMenu();
+    this.router.navigate(['/friends']);
+  }
 }
