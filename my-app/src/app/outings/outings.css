@@ -416,10 +416,10 @@ h3 {
 
 .modal-title {
   margin: 0 0 10px;
-  font-size: 30px;
+  font-size: 25px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #124b2e;
+  color: #0f172a;
 }
 
 .modal-text {
@@ -540,3 +540,102 @@ h3 {
   font-size: 12px;
   color: #d32f2f;
 }
+
+.members-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.member-ava {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.friend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.friend-ava {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.friend-name {
+  flex: 1;
+  font-size: 15px;
+  color: #333;
+}
+
+.invite-btn {
+  padding: 6px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  background-color: #007aff;
+  color: white;
+  cursor: pointer;
+}
+
+.invite-btn:hover {
+  background-color: #0062cc;
+}
+
+
+.invites {
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 14px;
+  margin: 12px 0 20px;
+}
+
+.invites-title {
+  font-size: 1rem;
+  color: #222;
+  margin: 0 0 8px;
+}
+
+.invite-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid #f0f0f0;
+}
+.invite-row:first-of-type { border-top: 0; }
+
+.invite-info { flex: 1; font-size: 14px; color: #333; }
+.invite-info .line1 { margin-bottom: 2px; }
+.invite-info .line2 { color: #666; font-size: 12px; }
+
+.friend-ava {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.invite-actions { display: flex; gap: 8px; }
+.invite-actions .accept {
+  background: #10b981; color: white; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.invite-actions .decline {
+  background: #ef4444; color: white; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.invite-actions .accept:hover { filter: brightness(0.95); }
+.invite-actions .decline:hover { filter: brightness(0.95); }
