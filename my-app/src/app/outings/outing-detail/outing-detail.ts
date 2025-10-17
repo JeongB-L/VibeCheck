@@ -16,6 +16,8 @@ import { ToastrService } from 'ngx-toastr';
 const API = 'http://localhost:3001';
 
 
+
+
 // google maps global (loaded by a <script> in index.html)
 declare const google: any;
 
@@ -64,6 +66,16 @@ export class OutingDetail implements OnInit, AfterViewInit {
     return item.id;
   }
 
+  // --- Members ---
+  members: any[] = [];
+  owner: any = null;
+
+get isOwner() {
+  const o = this.outing();
+  const myId = sessionStorage.getItem('userId'); // uuid stored at login
+  return !!o && !!myId && myId === o.creator_id;
+}
+
   private platformId = inject(PLATFORM_ID);
   isBrowser = isPlatformBrowser(this.platformId);
   showMap = signal(false);
@@ -101,9 +113,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
   private makePin(color: string, scale = 1) {
     const svg = encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="${22 * scale}" height="${
-      33 * scale
-    }" viewBox="0 0 28 42">
+    <svg xmlns="http://www.w3.org/2000/svg" width="${22 * scale}" height="${33 * scale
+      }" viewBox="0 0 28 42">
       <path fill="${color}" opacity="0.85" d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 28 14 28s14-17.5 14-28C28 6.27 21.73 0 14 0z"/>
       <circle cx="14" cy="14" r="${4.5 * scale}" fill="white"/>
     </svg>`);
@@ -149,10 +160,51 @@ export class OutingDetail implements OnInit, AfterViewInit {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? 'Failed to load outing');
       this.outing.set(body.outing as Outing);
+
+
+       // ✅ fetch members
+    const memRes = await fetch(`${API}/api/outings/${id}/members`);
+    const memBody = await memRes.json().catch(() => ({}));
+    if (memRes.ok) {
+      this.owner = memBody.owner || null;
+      this.members = memBody.members || [];
+    } else {
+      this.toast.error('Failed to load members');
+    }
     } finally {
       this.loading.set(false);
     }
   }
+
+
+async removeMember(memberEmail: string, ev: Event) {
+  ev.stopPropagation();
+  const o = this.outing();
+  if (!o) return;
+
+  if (!confirm(`Remove ${memberEmail} from this outing?`)) return;
+
+  try {
+    const res = await fetch(`${API}/api/outings/${o.id}/removeMember`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // include the requester (you) + the member to remove
+      body: JSON.stringify({
+        requesterEmail: this.userEmail,
+        memberEmail,
+      }),
+    });
+
+    const b = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(b?.error || 'Failed to remove member');
+
+    this.toast.success('Member removed');
+    // Optimistic refresh
+    this.members = this.members.filter((m) => m.email !== memberEmail);
+  } catch (err: any) {
+    this.toast.error(err?.message || 'Error removing member');
+  }
+}
 
   async loadTab(key: TabKey) {
     const o = this.outing();
@@ -170,11 +222,11 @@ export class OutingDetail implements OnInit, AfterViewInit {
       )}&type=${serverType}&limit=20`;
       const res = await fetch(url);
 
-       if (!res.ok) {
-      this.toast.error("Failed to load recommendations (server error).");
-      this.items.set([]); // clear list
-      return;
-    }
+      if (!res.ok) {
+        this.toast.error("Failed to load recommendations (server error).");
+        this.items.set([]); // clear list
+        return;
+      }
 
       const data = (await res.json()) as RecResp;
 
@@ -186,12 +238,12 @@ export class OutingDetail implements OnInit, AfterViewInit {
         this.renderMarkers();
         this.fitMapBounds(data);
       }, 0);
-    } catch(err:any) {
+    } catch (err: any) {
       this.items.set([]);
       this.toast.error('Failed to load recommendations: ' + (err?.message || 'Unknown error'));
 
 
-    }finally {
+    } finally {
       this.loading.set(false);
     }
   }

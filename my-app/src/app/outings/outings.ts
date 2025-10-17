@@ -24,7 +24,7 @@ type MemberLite = {
   user_id: string;
   avatar_url?: string | null;
   name?: string | null;
-  role?: 'member' | 'admin';
+ role?: 'member' | 'admin' | 'owner';
 };
 
 @Component({
@@ -351,15 +351,41 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
       if (!res.ok) throw new Error(body?.error ?? 'Failed to load outings');
       this.outings = (body.outings ?? []) as Outing[];
 
-      await Promise.all(
-        this.outings.map(async (o) => {
-          try {
-            const r = await fetch(`${API}/api/outings/${o.id}/members`);
-            const b = await r.json().catch(() => ({}));
-            if (r.ok) this.membersByOuting[o.id] = (b.members || []) as MemberLite[];
-          } catch { /* ignore */ }
-        })
-      );
+ await Promise.all(
+  this.outings.map(async (o) => {
+    try {
+      const r = await fetch(`${API}/api/outings/${o.id}/members`);
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) return;
+
+      const combined: MemberLite[] = [];
+
+      // ✅ include owner first (if exists)
+      if (b.owner) {
+        combined.push({
+          user_id: b.owner.user_id,
+          name: b.owner.name,
+          avatar_url: b.owner.avatar_url,
+          role: 'owner'
+        });
+      }
+
+      // ✅ include all members
+      if (b.members?.length) {
+        combined.push(...b.members.map((m: any) => ({
+          user_id: m.user_id,
+          name: m.name,
+          avatar_url: m.avatar_url,
+          role: m.role
+        })));
+      }
+
+      this.membersByOuting[o.id] = combined;
+    } catch (err) {
+      console.warn('Failed to load members for outing', o.id, err);
+    }
+  })
+);
 
     } catch (e: any) {
       console.error('Fetch outings error:', e);

@@ -543,9 +543,10 @@ h3 {
 
 .members-pill {
   display: flex;
-  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  margin-left: auto;
+   margin-top: 50px; 
+
 }
 
 .member-ava {

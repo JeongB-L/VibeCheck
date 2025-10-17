@@ -338,45 +338,79 @@ router.get("/outings/:id/members", async (req, res) => {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid id" });
 
+    // 1️⃣ Get the outing (to identify owner)
+    const { data: outing, error: oErr } = await db
+      .from("outings")
+      .select("creator_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (oErr) return res.status(500).json({ error: oErr.message });
+    if (!outing) return res.status(404).json({ error: "Outing not found" });
+
+    // 2️⃣ Get all members
     const { data: rows, error: mErr } = await db
       .from("outing_members")
       .select("user_id, role, joined_at")
       .eq("outing_id", id);
     if (mErr) return res.status(500).json({ error: mErr.message });
 
-    if (!rows?.length) return res.json({ members: [] });
+    const memberIds = rows.map(r => r.user_id);
+    // Combine members + owner for lookup
+    const allIds = Array.from(new Set([...memberIds, outing.creator_id]));
 
-    const ids = rows.map(r => r.user_id);
+    // 3️⃣ Fetch user data
     const { data: users, error: uErr } = await db
       .from("users")
       .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
-      .in("user_id", ids);
+      .in("user_id", allIds);
     if (uErr) return res.status(500).json({ error: uErr.message });
 
     const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
-    const members = rows.map(r => {
-      const u: any = byId.get(r.user_id) || {};
-      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
-      return {
-        user_id: r.user_id,
-        email: u.email || null,
-        name,
-        display_name: u.profiles?.display_name ?? null,
-        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
-        role: r.role,
-        joined_at: r.joined_at,
-      };
-    });
 
-    res.json({ members });
+    // 4️⃣ Build owner object
+    const ownerUser = byId.get(outing.creator_id);
+    const owner = ownerUser
+      ? {
+          user_id: ownerUser.user_id,
+          email: ownerUser.email,
+          name: [ownerUser.first_name, ownerUser.last_name].filter(Boolean).join(" "),
+          display_name: ownerUser.profiles?.display_name ?? null,
+          avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
+          role: "owner",
+          joined_at: null,
+          is_owner: true,
+        }
+      : null;
+
+    // 5️⃣ Build members excluding owner
+    const members = rows
+      .filter(r => r.user_id !== outing.creator_id) // 🚫 exclude owner
+      .map(r => {
+        const u: any = byId.get(r.user_id) || {};
+        const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+        return {
+          user_id: r.user_id,
+          email: u.email || null,
+          name,
+          display_name: u.profiles?.display_name ?? null,
+          avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+          role: r.role ?? "member",
+          joined_at: r.joined_at,
+          is_owner: false,
+        };
+      });
+
+    res.json({ owner, members });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Server error" });
   }
 });
 
+
 // =============================================================
-// NEW: Send an invite to a friend
-// POST /api/outings/:id/invite { inviterEmail, inviteeEmail }
+// POST /api/outings/:id/invite  { inviterEmail, inviteeEmail }
+// - Allows re-invite after decline/accept/remove
+// - Idempotent if a PENDING invite already exists
 // =============================================================
 router.post("/outings/:id/invite", async (req, res) => {
   try {
@@ -384,40 +418,63 @@ router.post("/outings/:id/invite", async (req, res) => {
     const inviter = await getUserByEmail(req.body?.inviterEmail);
     const invitee = await getUserByEmail(req.body?.inviteeEmail);
 
+    // Must be creator or admin
     if (!(await isAdminOrCreator(outingId, inviter.user_id))) {
       return res.status(403).json({ error: "Not allowed to invite for this outing" });
     }
 
-    // Already a member?
-    const { data: existsMember } = await db
+    // Already a member? (don't invite again)
+    const { data: existsMember, error: mErr } = await db
       .from("outing_members")
       .select("user_id")
       .eq("outing_id", outingId)
       .eq("user_id", invitee.user_id)
       .maybeSingle();
+    if (mErr) return res.status(500).json({ error: mErr.message });
     if (existsMember) return res.status(409).json({ error: "User is already a member" });
 
-    // Insert invite (unique on (outing_id, invitee_id))
+    // Try to insert a pending invite. Thanks to the PARTIAL unique index,
+    // conflict only happens if there's already a PENDING invite.
     const { data, error } = await db
       .from("outing_invites")
-      .insert([{ outing_id: outingId, inviter_id: inviter.user_id, invitee_id: invitee.user_id }])
+      .insert([{
+        outing_id: outingId,
+        inviter_id: inviter.user_id,
+        invitee_id: invitee.user_id,
+        status: "pending",      // <- key
+        responded_at: null
+      }])
       .select()
       .single();
 
-    if (error) {
-      if (/duplicate|unique/i.test(error.message)) {
-        return res.status(409).json({ error: "Invite already exists" });
-      }
-      return res.status(500).json({ error: error.message });
+    if (!error) {
+      return res.status(201).json({ invite: data });
     }
 
-    res.status(201).json({ invite: data });
+    // If duplicate pending invite, make it idempotent (turn any existing row back to pending)
+    // Supabase error codes align with Postgres; duplicate is 23505.
+    if (error.code === "23505") {
+      const { data: upd, error: updErr } = await db
+        .from("outing_invites")
+        .update({ status: "pending", responded_at: null })
+        .eq("outing_id", outingId)
+        .eq("invitee_id", invitee.user_id)
+        .select()
+        .single();
+
+      if (updErr) return res.status(500).json({ error: updErr.message });
+      return res.status(200).json({ invite: upd });
+    }
+
+    // Other DB error
+    return res.status(500).json({ error: error.message });
   } catch (e: any) {
     const msg = e?.message || "Server error";
     const code = /Valid email|User not found/.test(msg) ? 400 : 500;
-    res.status(code).json({ error: msg });
+    return res.status(code).json({ error: msg });
   }
 });
+
 
 // =============================================================
 // NEW: List invites for me (incoming + outgoing) for one outing
@@ -473,6 +530,141 @@ router.get("/outings/:id/invites", async (req, res) => {
     res.status(code).json({ error: msg });
   }
 });
+
+
+// =============================================================
+// POST /api/outings/:id/removeMember  { requesterEmail, memberEmail }
+// Removes from outing_members. Does NOT touch invites.
+// =============================================================
+router.post("/outings/:id/removeMember", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const requester = await getUserByEmail(req.body?.requesterEmail);
+    const toRemove = await getUserByEmail(req.body?.memberEmail);
+
+    if (!(await isAdminOrCreator(outingId, requester.user_id))) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    // Can't remove the creator
+    const outing = await getOuting(outingId);
+    if (outing?.creator_id === toRemove.user_id) {
+      return res.status(409).json({ error: "Owner cannot be removed" });
+    }
+
+    const { error } = await db
+      .from("outing_members")
+      .delete()
+      .eq("outing_id", outingId)
+      .eq("user_id", toRemove.user_id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    res.status(code).json({ error: msg });
+  }
+});
+
+
+// GET /api/outings/:id/preferences?email=me@example.com
+// -> return THIS user's prefs for THIS outing
+router.get("/outings/:id/preferences", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const me = await getUserByEmail(String(req.query.email || ""));
+    if (!outingId) return res.status(400).json({ error: "Invalid id" });
+
+    // must be creator or member to read
+    const allowed = await isAdminOrCreator(outingId, me.user_id) || await db
+      .from("outing_members")
+      .select("user_id").eq("outing_id", outingId).eq("user_id", me.user_id)
+      .maybeSingle().then(r => !!r.data);
+
+    if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+    const { data, error } = await db
+      .from("outing_preferences")
+      .select("activities, food, budget")
+      .eq("outing_id", outingId)
+      .eq("user_id", me.user_id)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ preferences: data ?? { activities: [], food: [], budget: null } });
+  } catch (e:any) {
+    res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+// GET /api/outings/:id/preferences?email=me@example.com
+// -> return THIS user's prefs for THIS outing
+router.get("/outings/:id/preferences", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const me = await getUserByEmail(String(req.query.email || ""));
+    if (!outingId) return res.status(400).json({ error: "Invalid id" });
+
+    // must be creator or member to read
+    const allowed = await isAdminOrCreator(outingId, me.user_id) || await db
+      .from("outing_members")
+      .select("user_id").eq("outing_id", outingId).eq("user_id", me.user_id)
+      .maybeSingle().then(r => !!r.data);
+
+    if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+    const { data, error } = await db
+      .from("outing_preferences")
+      .select("activities, food, budget")
+      .eq("outing_id", outingId)
+      .eq("user_id", me.user_id)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ preferences: data ?? { activities: [], food: [], budget: null } });
+  } catch (e:any) {
+    res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+// POST /api/outings/:id/preferences
+// body: { email, activities?: string[], food?: string[], budget?: "low"|"mid"|"high"|"luxury" }
+router.post("/outings/:id/preferences", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const me = await getUserByEmail(String(req.body?.email || ""));
+    if (!outingId) return res.status(400).json({ error: "Invalid id" });
+
+    // must be creator or member to write
+    const allowed = await isAdminOrCreator(outingId, me.user_id) || await db
+      .from("outing_members")
+      .select("user_id").eq("outing_id", outingId).eq("user_id", me.user_id)
+      .maybeSingle().then(r => !!r.data);
+
+    if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+    const payload: any = {};
+    if (Array.isArray(req.body.activities)) payload.activities = req.body.activities;
+    if (Array.isArray(req.body.food))       payload.food       = req.body.food;
+    if (["low","mid","high","luxury"].includes(req.body.budget)) payload.budget = req.body.budget;
+
+    // upsert
+    const { data, error } = await db
+      .from("outing_preferences")
+      .upsert([{ outing_id: outingId, user_id: me.user_id, ...payload }], { onConflict: "outing_id,user_id" })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ preferences: { activities: data.activities, food: data.food, budget: data.budget }});
+  } catch (e:any) {
+    res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+
 
 
 export default router;
