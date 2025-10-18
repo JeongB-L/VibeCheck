@@ -1,42 +1,45 @@
 <app-header></app-header>
 
-
-
 <div class="detail-wrap" *ngIf="outing() as o">
   <header class="hdr">
     <h1>{{ o.title }}</h1>
     <div class="sub">{{ o.location }} • {{ o.start_date }} → {{ o.end_date }}</div>
   </header>
 
-<!-- was: *ngIf="members.length" -->
-<section class="members-section" *ngIf="owner || (members && members.length >= 0)">
-
-  <div class="owner-block" *ngIf="owner">
-    <h3 class="subhead">Owner</h3>
-    <div class="member-card owner">
-      <img [src]="owner.avatar_url || 'assets/default_pfp.jpg'" class="member-ava" alt="" />
-      <div class="member-name">{{ owner.display_name || owner.name || owner.email }}</div>
-    </div>
-  </div>
-
-  <div class="members-block">
-    <h3 class="subhead">Members</h3>
-
-    <ng-container *ngIf="members && members.length; else noMembers">
-      <div class="member-card" *ngFor="let m of members">
-        <img [src]="m.avatar_url || 'assets/default_pfp.jpg'" class="member-ava" alt="" />
-        <div class="member-name">{{ m.display_name || m.name || m.email }}</div>
-        <button *ngIf="isOwner" class="remove-btn" (click)="removeMember(m.email, $event)">Remove</button>
+  <!-- was: *ngIf="members.length" -->
+  <section class="members-section" *ngIf="owner || (members && members.length >= 0)">
+    <div class="owner-block" *ngIf="owner">
+      <h3 class="subhead">Owner</h3>
+      <div class="member-card owner">
+        <img [src]="owner.avatar_url || 'assets/default_pfp.jpg'" class="member-ava" alt="" />
+        <div class="member-name">{{ owner.display_name || owner.name || owner.email }}</div>
       </div>
-    </ng-container>
+    </div>
 
-    <ng-template #noMembers>
-      <div class="member-empty">No members yet.</div>
-    </ng-template>
-  </div>
+    <div class="members-block">
+      <h3 class="subhead">Members</h3>
 
-</section>
+      <ng-container *ngIf="members && members.length; else noMembers">
+        <div class="member-card" *ngFor="let m of members">
+          <img [src]="m.avatar_url || 'assets/default_pfp.jpg'" class="member-ava" alt="" />
+          <div class="member-name">{{ m.display_name || m.name || m.email }}</div>
+          <button *ngIf="isOwner" class="remove-btn" (click)="removeMember(m.email, $event)">
+            Remove
+          </button>
+        </div>
+      </ng-container>
 
+      <ng-template #noMembers>
+        <div class="member-empty">No members yet.</div>
+      </ng-template>
+
+      <h3 class="subhead">Set your preferences</h3>
+      <button class="set-preferences" (click)="openPreferences()">Set Preferences</button>
+
+      <h3 class="subhead">Group Preference Profile</h3>
+      <button class="group-profile" (click)="openGroupProfile()">View Group Profile</button>
+    </div>
+  </section>
 
   <div class="layout">
     <section class="left">

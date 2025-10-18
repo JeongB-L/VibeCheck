@@ -24,7 +24,7 @@ type MemberLite = {
   user_id: string;
   avatar_url?: string | null;
   name?: string | null;
- role?: 'member' | 'admin' | 'owner';
+  role?: 'member' | 'admin' | 'owner';
 };
 
 @Component({
@@ -35,15 +35,25 @@ type MemberLite = {
   styleUrl: './outings.css',
 })
 export class Outings implements OnInit {
-
   pendingInvites: Array<{
-  id: number;
-  status: string;
-  created_at: string;
-  outing: { id: number; title: string; location: string; start_date: string; end_date: string } | null;
-  inviter: { email: string; display_name?: string | null; name?: string; avatar_path?: string | null };
-}> = [];
-invitesLoading = false;
+    id: number;
+    status: string;
+    created_at: string;
+    outing: {
+      id: number;
+      title: string;
+      location: string;
+      start_date: string;
+      end_date: string;
+    } | null;
+    inviter: {
+      email: string;
+      display_name?: string | null;
+      name?: string;
+      avatar_path?: string | null;
+    };
+  }> = [];
+  invitesLoading = false;
 
   membersByOuting: Record<number, MemberLite[]> = {};
 
@@ -55,7 +65,7 @@ invitesLoading = false;
 
   menuForId: number | null = null;
   confirmId: number | null = null;
-  confirmTitle = ''
+  confirmTitle = '';
 
   // form fields
   title = '';
@@ -71,9 +81,11 @@ invitesLoading = false;
   selectedPlace: PlaceLite | null = null;
   locTouched = false;
 
-  constructor(private toast: ToastrService, private router: Router, public places: PlacesService) { }
+  constructor(private toast: ToastrService, private router: Router, public places: PlacesService) {}
 
-  goDetail(id: number) { this.router.navigate(['/outings', id]); }
+  goDetail(id: number) {
+    this.router.navigate(['/outings', id]);
+  }
 
   // open the confirm dialog
   openDeleteConfirm(o: Outing, ev?: MouseEvent) {
@@ -122,30 +134,27 @@ invitesLoading = false;
     }
 
     this.fetchOutings();
-    this.loadMyInvites()
-
+    this.loadMyInvites();
 
     // ---------- wire autocomplete stream ---------- // ADD
-    this.locQuery$
-      .pipe(debounceTime(180), distinctUntilChanged())
-      .subscribe(async (q) => {
-        if (!q || q.length < 2) {
-          this.locResults = [];
-          this.locOpen = false;
-          return;
-        }
-        this.locLoading = true;
-        try {
-          const data = await this.places.autocomplete(q);
-          this.locResults = data.places ?? [];
-          this.locOpen = this.locResults.length > 0;
-        } catch {
-          this.locResults = [];
-          this.locOpen = false;
-        } finally {
-          this.locLoading = false;
-        }
-      });
+    this.locQuery$.pipe(debounceTime(180), distinctUntilChanged()).subscribe(async (q) => {
+      if (!q || q.length < 2) {
+        this.locResults = [];
+        this.locOpen = false;
+        return;
+      }
+      this.locLoading = true;
+      try {
+        const data = await this.places.autocomplete(q);
+        this.locResults = data.places ?? [];
+        this.locOpen = this.locResults.length > 0;
+      } catch {
+        this.locResults = [];
+        this.locOpen = false;
+      } finally {
+        this.locLoading = false;
+      }
+    });
   }
 
   // ---------- helpers ----------
@@ -176,7 +185,7 @@ invitesLoading = false;
 
   pickPlace(p: PlaceLite) {
     this.selectedPlace = p;
-    this.location = p.name;                  // or `${p.name}, ${p.address}` // ADD
+    this.location = p.name; // or `${p.name}, ${p.address}` // ADD
     this.locOpen = false;
     this.locTouched = true;
     // If you want to persist coordinates/placeId later, store them here
@@ -203,8 +212,6 @@ invitesLoading = false;
   friends: any[] = [];
   friendsLoading = false;
 
-
-
   defaultAvatar = 'assets/default_pfp.jpg';
 
   avatarUrl(u: { avatar_path?: string | null }) {
@@ -212,46 +219,48 @@ invitesLoading = false;
   }
 
   // Load my pending invites
-async loadMyInvites() {
-  if (!this.userEmail) return;
-  try {
-    this.invitesLoading = true;
-    const r = await fetch(`${API}/api/outings/invites?email=${encodeURIComponent(this.userEmail)}&status=pending`);
-    const b = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(b?.error || 'Failed to load invites');
-    this.pendingInvites = b.invites || [];
-  } catch (e: any) {
-    console.error('loadMyInvites error:', e);
-    this.toast.error(e?.message || 'Failed to load invites', 'Invites');
-  } finally {
-    this.invitesLoading = false;
+  async loadMyInvites() {
+    if (!this.userEmail) return;
+    try {
+      this.invitesLoading = true;
+      const r = await fetch(
+        `${API}/api/outings/invites?email=${encodeURIComponent(this.userEmail)}&status=pending`
+      );
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b?.error || 'Failed to load invites');
+      this.pendingInvites = b.invites || [];
+    } catch (e: any) {
+      console.error('loadMyInvites error:', e);
+      this.toast.error(e?.message || 'Failed to load invites', 'Invites');
+    } finally {
+      this.invitesLoading = false;
+    }
   }
-}
 
-// Accept / Decline
-async respondInvite(inviteId: number, action: 'accept' | 'decline') {
-  try {
-    const r = await fetch(`${API}/api/outings/invites/${inviteId}/respond`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: this.userEmail, action }),
-    });
-    const b = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(b?.error || `Failed to ${action}`);
+  // Accept / Decline
+  async respondInvite(inviteId: number, action: 'accept' | 'decline') {
+    try {
+      const r = await fetch(`${API}/api/outings/invites/${inviteId}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: this.userEmail, action }),
+      });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b?.error || `Failed to ${action}`);
 
-    if (action === 'accept') this.toast.success('Invite accepted');
-    else this.toast.info('Invite declined');
+      if (action === 'accept') this.toast.success('Invite accepted');
+      else this.toast.info('Invite declined');
 
-    // refresh invites
-    await this.loadMyInvites();
+      // refresh invites
+      await this.loadMyInvites();
 
-    // if accepted, the trigger added me to members → refresh members cache
-    await this.fetchOutings();
-  } catch (e: any) {
-    console.error('respondInvite error:', e);
-    this.toast.error(e?.message || 'Error handling invite');
+      // if accepted, the trigger added me to members → refresh members cache
+      await this.fetchOutings();
+    } catch (e: any) {
+      console.error('respondInvite error:', e);
+      this.toast.error(e?.message || 'Error handling invite');
+    }
   }
-}
 
   async openInviteModal(o: any, ev: Event) {
     ev.stopPropagation();
@@ -267,7 +276,9 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
   async loadFriends() {
     try {
       this.friendsLoading = true;
-      const res = await fetch(`${API}/api/friends?email=${encodeURIComponent(this.userEmail || '')}`);
+      const res = await fetch(
+        `${API}/api/friends?email=${encodeURIComponent(this.userEmail || '')}`
+      );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || 'Failed to load friends');
       this.friends = body.friends || [];
@@ -289,8 +300,8 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           inviterEmail: this.userEmail,
-          inviteeEmail: friendEmail
-        })
+          inviteeEmail: friendEmail,
+        }),
       });
 
       const b = await r.json().catch(() => ({}));
@@ -302,7 +313,6 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
       this.toast.error(e?.message || 'Invite failed', 'Error');
     }
   }
-
 
   private get userEmail(): string | null {
     const v = sessionStorage.getItem('userEmail'); // set at login
@@ -324,7 +334,6 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
   toggleMenu(id: number) {
     this.menuForId = this.menuForId === id ? null : id;
   }
-
 
   private validDates(): boolean {
     return !!this.start && !!this.end && new Date(this.start) <= new Date(this.end);
@@ -351,42 +360,43 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
       if (!res.ok) throw new Error(body?.error ?? 'Failed to load outings');
       this.outings = (body.outings ?? []) as Outing[];
 
- await Promise.all(
-  this.outings.map(async (o) => {
-    try {
-      const r = await fetch(`${API}/api/outings/${o.id}/members`);
-      const b = await r.json().catch(() => ({}));
-      if (!r.ok) return;
+      await Promise.all(
+        this.outings.map(async (o) => {
+          try {
+            const r = await fetch(`${API}/api/outings/${o.id}/members`);
+            const b = await r.json().catch(() => ({}));
+            if (!r.ok) return;
 
-      const combined: MemberLite[] = [];
+            const combined: MemberLite[] = [];
 
-      // ✅ include owner first (if exists)
-      if (b.owner) {
-        combined.push({
-          user_id: b.owner.user_id,
-          name: b.owner.name,
-          avatar_url: b.owner.avatar_url,
-          role: 'owner'
-        });
-      }
+            // ✅ include owner first (if exists)
+            if (b.owner) {
+              combined.push({
+                user_id: b.owner.user_id,
+                name: b.owner.name,
+                avatar_url: b.owner.avatar_url,
+                role: 'owner',
+              });
+            }
 
-      // ✅ include all members
-      if (b.members?.length) {
-        combined.push(...b.members.map((m: any) => ({
-          user_id: m.user_id,
-          name: m.name,
-          avatar_url: m.avatar_url,
-          role: m.role
-        })));
-      }
+            // ✅ include all members
+            if (b.members?.length) {
+              combined.push(
+                ...b.members.map((m: any) => ({
+                  user_id: m.user_id,
+                  name: m.name,
+                  avatar_url: m.avatar_url,
+                  role: m.role,
+                }))
+              );
+            }
 
-      this.membersByOuting[o.id] = combined;
-    } catch (err) {
-      console.warn('Failed to load members for outing', o.id, err);
-    }
-  })
-);
-
+            this.membersByOuting[o.id] = combined;
+          } catch (err) {
+            console.warn('Failed to load members for outing', o.id, err);
+          }
+        })
+      );
     } catch (e: any) {
       console.error('Fetch outings error:', e);
       this.toast.error(e?.message ?? 'Load error', 'Outings');
@@ -396,7 +406,6 @@ async respondInvite(inviteId: number, action: 'accept' | 'decline') {
   memberAvatars(o: Outing): MemberLite[] {
     return (this.membersByOuting[o.id] || []).slice(0, 5); // show up to 5
   }
-
 
   // ---------- CREATE ----------
   async createOuting(): Promise<void> {

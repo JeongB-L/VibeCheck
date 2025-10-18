@@ -14,6 +14,7 @@ import { ProfileHistory } from './settings/profile-history/profile-history';
 import { ChangePassword } from './settings/change-password/change-password';
 import { FriendsPage } from './friends/friends';
 import { UserProfilePage } from './user-profile/user-profile';
+import { OutingPreferences } from './outings/outing-preferences/outing-preferences';
 
 export const routes: Routes = [
   {
@@ -55,4 +56,5 @@ export const routes: Routes = [
   { path: 'settings/change-password', component: ChangePassword },
   { path: 'friends', component: FriendsPage },
   { path: 'users/:id', component: UserProfilePage }, // this is the view only user profile from friends page
+  { path: 'outings/:id/my-outing-preferences', component: OutingPreferences },
 ];
