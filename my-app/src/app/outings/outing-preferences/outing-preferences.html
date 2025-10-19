@@ -1,0 +1,88 @@
+<app-header></app-header>
+
+<div class="detail-wrap">
+  <!-- Page Content -->
+  <div class="page-content" *ngIf="currentPage() === 0">
+    <div class="hdr">
+      <h1>Page 1: Select Activities</h1>
+      <h1></h1>
+      <span class="sub">Please choose what activities interest you the most!</span>
+      <h1></h1>
+      <h1></h1>
+    </div>
+    <div class="interests-field">
+      <mat-chip-listbox #chipList [multiple]="true" aria-label="Attraction selection">
+        <mat-chip-option
+          *ngFor="let interest of currentOptions"
+          [selectable]="true"
+          [selected]="selectedActivities.includes(interest)"
+          (selectionChange)="toggleSelection($event, interest)"
+        >
+          {{ interest }}
+        </mat-chip-option>
+      </mat-chip-listbox>
+    </div>
+  </div>
+
+  <div class="page-content" *ngIf="currentPage() === 1">
+    <div class="hdr">
+      <h1>Page 2: Select Food Preferences</h1>
+      <h1></h1>
+      <span class="sub">Choose what interests you most.</span>
+      <h1></h1>
+    </div>
+    <div class="interests-field">
+      <mat-chip-listbox #chipList [multiple]="true" aria-label="Food & Experiences selection">
+        <mat-chip-option
+          *ngFor="let interest of currentOptions"
+          [selectable]="true"
+          [selected]="selectedFood.includes(interest)"
+          (selectionChange)="toggleSelection($event, interest)"
+        >
+          {{ interest }}
+        </mat-chip-option>
+      </mat-chip-listbox>
+    </div>
+  </div>
+
+  <div class="page-content" *ngIf="currentPage() === 2">
+    <div class="hdr">
+      <h1>Page 3: Select Your Budget Level</h1>
+      <h1></h1>
+      <span class="sub">We will do our best to align with your budget!</span>
+      <h1></h1>
+    </div>
+    <div class="interests-field">
+      <mat-chip-listbox #chipList [multiple]="true" aria-label="Activities & Nightlife selection">
+        <mat-chip-option
+          *ngFor="let interest of currentOptions"
+          [selectable]="true"
+          [selected]="selectedBudget.includes(interest)"
+          (selectionChange)="toggleSelection($event, interest)"
+        >
+          {{ interest }}
+        </mat-chip-option>
+      </mat-chip-listbox>
+    </div>
+  </div>
+
+  <!-- Navigation Buttons -->
+  <div class="navigation-buttons">
+    <button mat-raised-button color="accent" (click)="prevPage()" [disabled]="isFirstPage()">
+      Before
+    </button>
+
+    <button mat-raised-button color="primary" (click)="nextPage()" *ngIf="!isLastPage()">
+      After
+    </button>
+
+    <button mat-raised-button color="primary" (click)="submitInterests()" *ngIf="isLastPage()">
+      Submit
+    </button>
+  </div>
+
+  <!-- Summary (Optional: Shows all selections) -->
+  <p *ngIf="selectedActivities.length">Activities: {{ selectedActivities.join(', ') }}</p>
+  <p *ngIf="selectedFood.length">Food: {{ selectedFood.join(', ') }}</p>
+  <p *ngIf="selectedBudget.length">Budget: {{ selectedBudget.join(', ') }}</p>
+</div>

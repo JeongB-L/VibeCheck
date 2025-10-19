@@ -6,7 +6,8 @@ const router = Router();
 
 function normEmail(e?: string) {
   const v = (e || "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new Error("Valid email is required");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    throw new Error("Valid email is required");
   return v;
 }
 async function getUserByEmail(email: string) {
@@ -48,13 +49,13 @@ async function isAdminOrCreator(outingId: number, userId: string) {
 // helper to get user_id from email (like profile routes)
 async function getUserIdFromEmail(email: string): Promise<string | null> {
   if (!email) return null;
-  
+
   const { data: user, error } = await db
     .from("users")
     .select("user_id")
     .eq("email", email.trim().toLowerCase())
     .maybeSingle();
-    
+
   if (error || !user) return null;
   return user.user_id;
 }
@@ -63,7 +64,9 @@ async function getUserIdFromEmail(email: string): Promise<string | null> {
 // GET /api/outings  -> list outings I own OR I’m a member of
 router.get("/outings", async (req, res) => {
   try {
-    const email = String(req.query.email ?? "").trim().toLowerCase();
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
@@ -72,10 +75,7 @@ router.get("/outings", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "User not found" });
 
     // 1) Outings I created
-    const ownQ = db
-      .from("outings")
-      .select("*")
-      .eq("creator_id", userId);
+    const ownQ = db.from("outings").select("*").eq("creator_id", userId);
 
     // 2) Outings where I’m a member (join via outing_members)
     //    Supabase: select from outing_members and pull the joined outing
@@ -90,19 +90,18 @@ router.get("/outings", async (req, res) => {
     if (ownErr) return res.status(500).json({ error: ownErr.message });
     if (memErr) return res.status(500).json({ error: memErr.message });
 
-    const memberOutings =
-      (mem || [])
-        .map((r: any) => r.outing)
-        .filter(Boolean);
+    const memberOutings = (mem || []).map((r: any) => r.outing).filter(Boolean);
 
     // merge + dedupe by id
     const seen = new Set<number>();
     const all = ([] as any[])
       .concat(own || [], memberOutings)
-      .filter((o) => (o && !seen.has(o.id) && seen.add(o.id)));
+      .filter((o) => o && !seen.has(o.id) && seen.add(o.id));
 
     // sort same as before
-    all.sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+    all.sort((a, b) =>
+      a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0
+    );
 
     res.json({ outings: all });
   } catch (e: any) {
@@ -115,9 +114,9 @@ router.post("/outings", async (req, res) => {
   try {
     console.log("=== POST /api/outings START ===");
     console.log("Request body:", req.body);
-    
+
     const { email, title, location, start_date, end_date } = req.body || {};
-    
+
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       console.log("❌ Invalid email format");
       return res.status(400).json({ error: "Valid email is required" });
@@ -130,7 +129,7 @@ router.post("/outings", async (req, res) => {
     console.log("✅ Validation passed, looking up user...");
     const userId = await getUserIdFromEmail(email);
     console.log("User ID found:", userId);
-    
+
     if (!userId) {
       console.log("❌ User not found in database");
       return res.status(401).json({ error: "User not found" });
@@ -147,7 +146,7 @@ router.post("/outings", async (req, res) => {
       console.error("❌ Database insert error:", error);
       return res.status(500).json({ error: error.message });
     }
-    
+
     console.log("✅ Outing created successfully:", data);
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
@@ -167,7 +166,9 @@ router.get("/outings/invites", async (req, res) => {
     // grab my invites (as invitee)
     const { data: invs, error } = await db
       .from("outing_invites")
-      .select("id, outing_id, inviter_id, invitee_id, status, created_at, responded_at")
+      .select(
+        "id, outing_id, inviter_id, invitee_id, status, created_at, responded_at"
+      )
       .eq("invitee_id", me.user_id)
       .eq("status", status);
     if (error) return res.status(500).json({ error: error.message });
@@ -175,20 +176,29 @@ router.get("/outings/invites", async (req, res) => {
     if (!invs?.length) return res.json({ invites: [] });
 
     // fetch outing + inviter info
-    const outingIds = [...new Set(invs.map(i => i.outing_id))];
-    const inviterIds = [...new Set(invs.map(i => i.inviter_id))];
+    const outingIds = [...new Set(invs.map((i) => i.outing_id))];
+    const inviterIds = [...new Set(invs.map((i) => i.inviter_id))];
 
-    const [{ data: outings, error: oErr }, { data: users, error: uErr }] = await Promise.all([
-      db.from("outings").select("id, title, location, start_date, end_date").in("id", outingIds),
-      db.from("users").select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)").in("user_id", inviterIds),
-    ]);
+    const [{ data: outings, error: oErr }, { data: users, error: uErr }] =
+      await Promise.all([
+        db
+          .from("outings")
+          .select("id, title, location, start_date, end_date")
+          .in("id", outingIds),
+        db
+          .from("users")
+          .select(
+            "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+          )
+          .in("user_id", inviterIds),
+      ]);
     if (oErr) return res.status(500).json({ error: oErr.message });
     if (uErr) return res.status(500).json({ error: uErr.message });
 
-    const outingById = new Map((outings || []).map(o => [o.id, o]));
+    const outingById = new Map((outings || []).map((o) => [o.id, o]));
     const userById = new Map((users || []).map((u: any) => [u.user_id, u]));
 
-    const invites = invs.map(i => {
+    const invites = invs.map((i) => {
       const inv = userById.get(i.inviter_id) || {};
       const name = [inv.first_name, inv.last_name].filter(Boolean).join(" ");
       return {
@@ -202,7 +212,7 @@ router.get("/outings/invites", async (req, res) => {
           email: inv.email,
           name,
           display_name: inv.profiles?.display_name ?? null,
-          avatar_path: publicUrlFromPath(inv.profiles?.avatar_path),  // ✅ make it a public URL
+          avatar_path: publicUrlFromPath(inv.profiles?.avatar_path), // ✅ make it a public URL
         },
       };
     });
@@ -215,7 +225,6 @@ router.get("/outings/invites", async (req, res) => {
   }
 });
 
-
 // =============================================================
 // NEW: Respond to an invite (accept/decline)
 // POST /api/outings/invites/:inviteId/respond  { email, action: 'accept'|'decline' }
@@ -227,7 +236,9 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
     const action = String(req.body?.action || "").toLowerCase();
 
     if (!["accept", "decline"].includes(action)) {
-      return res.status(400).json({ error: "action must be 'accept' or 'decline'" });
+      return res
+        .status(400)
+        .json({ error: "action must be 'accept' or 'decline'" });
     }
 
     // Only the invitee can respond
@@ -238,8 +249,10 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
       .maybeSingle();
     if (iErr) return res.status(500).json({ error: iErr.message });
     if (!invite) return res.status(404).json({ error: "Invite not found" });
-    if (invite.invitee_id !== me.user_id) return res.status(403).json({ error: "Not your invite" });
-    if (invite.status !== "pending") return res.status(409).json({ error: "Invite already handled" });
+    if (invite.invitee_id !== me.user_id)
+      return res.status(403).json({ error: "Not your invite" });
+    if (invite.status !== "pending")
+      return res.status(409).json({ error: "Invite already handled" });
 
     const newStatus = action === "accept" ? "accepted" : "declined";
 
@@ -260,12 +273,12 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
   }
 });
 
-
-
 // DELETE /api/outings/:id  -> delete
 router.delete("/outings/:id", async (req, res) => {
   try {
-    const email = String(req.query.email ?? "").trim().toLowerCase();
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
@@ -286,12 +299,13 @@ router.delete("/outings/:id", async (req, res) => {
   }
 });
 
-
 // GET /api/outings/:id  -> fetch a single outing (scoped to the caller's email)
 router.get("/outings/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const email = String(req.query.email ?? "").trim().toLowerCase();
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
 
     if (!id) return res.status(400).json({ error: "Invalid id" });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -329,7 +343,6 @@ router.get("/outings/:id", async (req, res) => {
   }
 });
 
-
 // NEW: List members (with avatar/display name) for an outing
 // GET /api/outings/:id/members
 // =============================================================
@@ -354,14 +367,16 @@ router.get("/outings/:id/members", async (req, res) => {
       .eq("outing_id", id);
     if (mErr) return res.status(500).json({ error: mErr.message });
 
-    const memberIds = rows.map(r => r.user_id);
+    const memberIds = rows.map((r) => r.user_id);
     // Combine members + owner for lookup
     const allIds = Array.from(new Set([...memberIds, outing.creator_id]));
 
     // 3️⃣ Fetch user data
     const { data: users, error: uErr } = await db
       .from("users")
-      .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
       .in("user_id", allIds);
     if (uErr) return res.status(500).json({ error: uErr.message });
 
@@ -373,7 +388,9 @@ router.get("/outings/:id/members", async (req, res) => {
       ? {
           user_id: ownerUser.user_id,
           email: ownerUser.email,
-          name: [ownerUser.first_name, ownerUser.last_name].filter(Boolean).join(" "),
+          name: [ownerUser.first_name, ownerUser.last_name]
+            .filter(Boolean)
+            .join(" "),
           display_name: ownerUser.profiles?.display_name ?? null,
           avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
           role: "owner",
@@ -384,8 +401,8 @@ router.get("/outings/:id/members", async (req, res) => {
 
     // 5️⃣ Build members excluding owner
     const members = rows
-      .filter(r => r.user_id !== outing.creator_id) // 🚫 exclude owner
-      .map(r => {
+      .filter((r) => r.user_id !== outing.creator_id) // 🚫 exclude owner
+      .map((r) => {
         const u: any = byId.get(r.user_id) || {};
         const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
         return {
@@ -406,7 +423,6 @@ router.get("/outings/:id/members", async (req, res) => {
   }
 });
 
-
 // =============================================================
 // POST /api/outings/:id/invite  { inviterEmail, inviteeEmail }
 // - Allows re-invite after decline/accept/remove
@@ -420,7 +436,9 @@ router.post("/outings/:id/invite", async (req, res) => {
 
     // Must be creator or admin
     if (!(await isAdminOrCreator(outingId, inviter.user_id))) {
-      return res.status(403).json({ error: "Not allowed to invite for this outing" });
+      return res
+        .status(403)
+        .json({ error: "Not allowed to invite for this outing" });
     }
 
     // Already a member? (don't invite again)
@@ -431,19 +449,22 @@ router.post("/outings/:id/invite", async (req, res) => {
       .eq("user_id", invitee.user_id)
       .maybeSingle();
     if (mErr) return res.status(500).json({ error: mErr.message });
-    if (existsMember) return res.status(409).json({ error: "User is already a member" });
+    if (existsMember)
+      return res.status(409).json({ error: "User is already a member" });
 
     // Try to insert a pending invite. Thanks to the PARTIAL unique index,
     // conflict only happens if there's already a PENDING invite.
     const { data, error } = await db
       .from("outing_invites")
-      .insert([{
-        outing_id: outingId,
-        inviter_id: inviter.user_id,
-        invitee_id: invitee.user_id,
-        status: "pending",      // <- key
-        responded_at: null
-      }])
+      .insert([
+        {
+          outing_id: outingId,
+          inviter_id: inviter.user_id,
+          invitee_id: invitee.user_id,
+          status: "pending", // <- key
+          responded_at: null,
+        },
+      ])
       .select()
       .single();
 
@@ -475,7 +496,6 @@ router.post("/outings/:id/invite", async (req, res) => {
   }
 });
 
-
 // =============================================================
 // NEW: List invites for me (incoming + outgoing) for one outing
 // GET /api/outings/:id/invites?email=me@example.com
@@ -491,17 +511,19 @@ router.get("/outings/:id/invites", async (req, res) => {
       .eq("outing_id", outingId);
     if (error) return res.status(500).json({ error: error.message });
 
-    const ids = [...new Set(invs.flatMap(i => [i.inviter_id, i.invitee_id]))];
+    const ids = [...new Set(invs.flatMap((i) => [i.inviter_id, i.invitee_id]))];
     if (!ids.length) return res.json({ invites: [] });
 
     const { data: users, error: uErr } = await db
       .from("users")
-      .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
       .in("user_id", ids);
     if (uErr) return res.status(500).json({ error: uErr.message });
 
     const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
-    const invites = invs.map(i => {
+    const invites = invs.map((i) => {
       const inv = byId.get(i.inviter_id) || {};
       const iee = byId.get(i.invitee_id) || {};
       const fmt = (u: any) => ({
@@ -530,7 +552,6 @@ router.get("/outings/:id/invites", async (req, res) => {
     res.status(code).json({ error: msg });
   }
 });
-
 
 // =============================================================
 // POST /api/outings/:id/removeMember  { requesterEmail, memberEmail }
@@ -568,8 +589,55 @@ router.post("/outings/:id/removeMember", async (req, res) => {
   }
 });
 
+router.post("/outings/:id/updateUserOutingPreferences", async (req, res) => {
+  try {
+    const { id: outingId } = req.params;
+    const { userId, activities, food, budget } = req.body;
 
+    // Validate required fields
+    if (
+      !outingId ||
+      !userId ||
+      !Array.isArray(activities) ||
+      !Array.isArray(food) ||
+      !Array.isArray(budget)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing or invalid required fields" });
+    }
 
+    // Fetch the outing to verify existence
+    const outing = await getOuting(Number(outingId));
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
 
+    // Upsert into outing_preferences table (updates if exists, inserts if not)
+    const { data: updatedPref, error: upsertErr } = await db
+      .from("outing_preferences")
+      .upsert({
+        user_id: userId,
+        outing_id: Number(outingId),
+        activities,
+        food,
+        budget,
+      })
+      .select()
+      .single();
+
+    if (upsertErr) throw upsertErr;
+
+    // Return success
+    res.json({
+      success: true,
+      message: "User outing preferences updated successfully",
+      outingId: Number(outingId),
+    });
+  } catch (e: any) {
+    console.error("Error updating user outing preferences:", e);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;
