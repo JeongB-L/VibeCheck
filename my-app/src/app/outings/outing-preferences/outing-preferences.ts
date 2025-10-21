@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipSelectionChange } from '@angular/material/chips';
@@ -8,6 +9,8 @@ import { HeaderComponent } from '../../header/header';
 import { ToastrService } from 'ngx-toastr';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
 
 const API = 'http://localhost:3001';
 
@@ -16,11 +19,14 @@ const API = 'http://localhost:3001';
   selector: 'app-outing-detail',
   imports: [
     CommonModule,
+    FormsModule,
     RouterModule,
     HeaderComponent,
     MatChipsModule,
     MatIconModule,
     MatButtonModule,
+    MatInputModule,
+    MatFormFieldModule,
   ],
   templateUrl: './outing-preferences.html',
   styleUrls: ['./outing-preferences.css'],
@@ -39,45 +45,45 @@ export class OutingPreferences {
   pageOptions = [
     // Page 1: Activity Preferences
     [
-      'Sleeping Under the Stars',
-      'Hidden Gems',
-      'Art Deco Historic District',
-      'Beach Clubs',
-      'Bike Riding',
-      'Snorkeling Adventures',
-      'Everglades Airboat Tours',
-      'Kayaking in Biscayne Bay',
-      'Vizcaya Museum & Gardens',
-      'Sunset Dolphin Cruises',
+      'Biking',
+      'Bowling',
+      'Riding a Boat',
+      'Swimming',
+      'Hiking',
+      'Fishing',
+      'Picnicking',
+      'Camping',
+      'Kayaking',
+      'Playing Tennis',
+      'Golfing',
+      'Skateboarding',
+      'Horseback Riding',
+      'Bird Watching',
+      'Gardening',
+      'Yoga',
+      'Photography',
+      'Cooking',
+      'Reading',
       'Stargazing',
-      'Cultural Festivals',
-      'Live Music Venues',
-      'Food Truck Tours',
-      'Historic Landmarks',
-      'Yoga on the Beach',
-      'Photography Spots',
-      'Wildlife Watching',
-      'Boat Rentals',
-      'Cigar Lounges',
     ],
     // Page 2: Food Preferences
     [
-      'Cuban Cuisine',
       'Chinese',
+      'American',
+      'Vegan',
+      'Cuban',
       'Italian',
-      'Seafood',
-      'Vegan & Vegetarian',
-      'Farm-to-Table',
       'Mexican',
-      'Steakhouse',
-      'Japanese Sushi & Ramen',
-      'Indian Spices & Curries',
-      'Thai Street Food',
-      'Mediterranean Mezze',
-      'Korean BBQ',
-      'French Bistro Fare',
-      'Latin American Fusion',
-      'Southern Comfort Food',
+      'Japanese',
+      'Indian',
+      'Thai',
+      'Korean',
+      'French',
+      'Mediterranean',
+      'Greek',
+      'Brazilian',
+      'Vietnamese',
+      'BBQ',
     ],
     // Page 3: Budget Preferences
     ['$', '$$', '$$$', '$$$$'],
@@ -86,6 +92,8 @@ export class OutingPreferences {
   selectedActivities: string[] = []; // Page 0 selections
   selectedFood: string[] = []; // Page 1 selections
   selectedBudget: string[] = []; // Page 2 selections
+
+  newOptionInput = ''; // Input for custom option
 
   get currentOptions(): string[] {
     return this.pageOptions[this.currentPage()] || [];
@@ -104,16 +112,40 @@ export class OutingPreferences {
     }
   }
 
+  get currentType(): string {
+    switch (this.currentPage()) {
+      case 0:
+        return 'activity';
+      case 1:
+        return 'cuisine';
+      case 2:
+        return 'budget level';
+      default:
+        return '';
+    }
+  }
+
   toggleSelection(event: MatChipSelectionChange, interest: string): void {
     const selections = this.currentSelections;
     if (event.selected) {
-      selections.push(interest);
+      if (!selections.includes(interest)) {
+        selections.push(interest);
+      }
     } else {
       const index = selections.indexOf(interest);
       if (index >= 0) {
         selections.splice(index, 1);
       }
     }
+  }
+
+  addCustomOption(): void {
+    const option = this.newOptionInput.trim();
+    if (option && !this.currentOptions.includes(option)) {
+      this.pageOptions[this.currentPage()].push(option);
+      this.currentSelections.push(option);
+    }
+    this.newOptionInput = '';
   }
 
   prevPage(): void {
