@@ -21,6 +21,23 @@
           {{ interest }}
         </mat-chip-option>
       </mat-chip-listbox>
+      <mat-form-field appearance="outline" class="custom-option-field">
+        <mat-label>Add your own {{ currentType }}</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newOptionInput"
+          placeholder="Type your option here..."
+          (keyup.enter)="addCustomOption()"
+        />
+        <button
+          mat-icon-button
+          matSuffix
+          (click)="addCustomOption()"
+          [disabled]="!newOptionInput?.trim()"
+        >
+          <mat-icon>add</mat-icon>
+        </button>
+      </mat-form-field>
     </div>
   </div>
 
@@ -42,6 +59,23 @@
           {{ interest }}
         </mat-chip-option>
       </mat-chip-listbox>
+      <mat-form-field appearance="outline" class="custom-option-field">
+        <mat-label>Add your own {{ currentType }}</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newOptionInput"
+          placeholder="Type your option here..."
+          (keyup.enter)="addCustomOption()"
+        />
+        <button
+          mat-icon-button
+          matSuffix
+          (click)="addCustomOption()"
+          [disabled]="!newOptionInput?.trim()"
+        >
+          <mat-icon>add</mat-icon>
+        </button>
+      </mat-form-field>
     </div>
   </div>
 
@@ -63,6 +97,23 @@
           {{ interest }}
         </mat-chip-option>
       </mat-chip-listbox>
+      <mat-form-field appearance="outline" class="custom-option-field">
+        <mat-label>Add your own {{ currentType }}</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newOptionInput"
+          placeholder="Type your option here..."
+          (keyup.enter)="addCustomOption()"
+        />
+        <button
+          mat-icon-button
+          matSuffix
+          (click)="addCustomOption()"
+          [disabled]="!newOptionInput?.trim()"
+        >
+          <mat-icon>add</mat-icon>
+        </button>
+      </mat-form-field>
     </div>
   </div>
 
@@ -81,8 +132,8 @@
     </button>
   </div>
 
-  <!-- Summary (Optional: Shows all selections) -->
+  <!-- Summary (Optional: Shows all selections)
   <p *ngIf="selectedActivities.length">Activities: {{ selectedActivities.join(', ') }}</p>
   <p *ngIf="selectedFood.length">Food: {{ selectedFood.join(', ') }}</p>
-  <p *ngIf="selectedBudget.length">Budget: {{ selectedBudget.join(', ') }}</p>
+  <p *ngIf="selectedBudget.length">Budget: {{ selectedBudget.join(', ') }}</p>-->
 </div>
