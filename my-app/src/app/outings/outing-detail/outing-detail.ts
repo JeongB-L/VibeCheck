@@ -48,6 +48,8 @@ type RecResp = {
 };
 
 type TabKey = 'food' | 'stay' | 'do';
+type Prefs = { activities: string[]; food: string[]; budget: string[] };
+type PrefEntry = { email: string; user_id: string | null; prefs: Prefs | null };
 
 @Component({
   standalone: true,
@@ -66,6 +68,11 @@ export class OutingDetail implements OnInit, AfterViewInit {
   // --- Members ---
   members: any[] = [];
   owner: any = null;
+
+  // --- Group profile state ---
+  showGroupProfile = false;
+  prefsLoading = false;
+  prefsMap = new Map<string, PrefEntry>();
 
   get isOwner() {
     const o = this.outing();
@@ -166,6 +173,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
       if (memRes.ok) {
         this.owner = memBody.owner || null;
         this.members = memBody.members || [];
+
+        await this.loadGroupPreferences();
       } else {
         this.toast.error('Failed to load members');
       }
@@ -332,7 +341,54 @@ export class OutingDetail implements OnInit, AfterViewInit {
   }
 
   async openGroupProfile() {
-    // TODO: implement group profile opening
+    this.showGroupProfile = !this.showGroupProfile;
+  }
+
+  private async loadGroupPreferences() {
+    const o = this.outing();
+    if (!o) return;
+
+    const people = this.groupMembers();
+    if (!people.length) return;
+
+    const outingId = Number(this.route.snapshot.paramMap.get('id'));
+    if (!outingId) return;
+
+    const emails = people
+      .map(p => String(p.email || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!emails.length) return;
+
+    this.prefsLoading = true;
+    try {
+      const res = await fetch(`${API}/api/outings/${outingId}/preferences/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Failed to load preferences');
+
+      (body.list || []).forEach((item: any) => {
+        const key = String(item.email || '').toLowerCase();
+        this.prefsMap.set(key, item);
+      });
+
+       console.log('[group]', this.groupMembers().map(p => p.email));
+        console.log('[prefs keys]', Array.from(this.prefsMap.keys()));
+    // ^ this shows who we asked for and whose prefs we actually got
+    } catch (err) {
+      console.error('Failed to load preferences', err);
+      this.toast.error('Failed to load preferences');
+    } finally {
+      this.prefsLoading = false;
+    }
+  }
+
+  hasAnyPref(p?: Prefs | null) {
+    if (!p) return false;
+    return !!(p.activities?.length || p.food?.length || p.budget?.length);
   }
 
   async openPreferences() {
@@ -356,5 +412,45 @@ export class OutingDetail implements OnInit, AfterViewInit {
   openInMaps(p: RecItem) {
     const q = encodeURIComponent(`${p.name} ${p.address ?? ''}`);
     window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
+  }
+
+
+  groupMembers(): Array<any> {
+    const seen = new Set<string>();
+    const list: any[] = [];
+
+    // owner first (if present)
+    if (this.owner?.email) {
+      const e = String(this.owner.email).trim().toLowerCase();
+      if (e && !seen.has(e)) {
+        list.push({ ...this.owner, __role: 'owner' });
+        seen.add(e);
+      }
+    }
+
+    // then the rest of the members
+    for (const m of this.members || []) {
+      const e = String(m.email || '').trim().toLowerCase();
+      if (e && !seen.has(e)) {
+        list.push({ ...m, __role: 'member' });
+        seen.add(e);
+      }
+    }
+
+    return list;
+  }
+
+  // Returns true if this email has non-empty prefs (activities OR food OR budget)
+  isDone(email?: string | null): boolean {
+    if (!email) return false;
+    const entry = this.prefsMap.get(String(email).toLowerCase());
+    if (!entry || !entry.prefs) return false;
+    const p = entry.prefs;
+    return !!((p.activities?.length) || (p.food?.length) || (p.budget?.length));
+  }
+
+  // How many in the group are done
+  doneCount(): number {
+    return this.groupMembers().reduce((n, m) => n + (this.isDone(m.email) ? 1 : 0), 0);
   }
 }

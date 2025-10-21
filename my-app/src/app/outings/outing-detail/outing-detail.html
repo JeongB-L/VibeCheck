@@ -6,7 +6,6 @@
     <div class="sub">{{ o.location }} • {{ o.start_date }} → {{ o.end_date }}</div>
   </header>
 
-  <!-- was: *ngIf="members.length" -->
   <section class="members-section" *ngIf="owner || (members && members.length >= 0)">
     <div class="owner-block" *ngIf="owner">
       <h3 class="subhead">Owner</h3>
@@ -36,8 +35,69 @@
       <h3 class="subhead">Set your preferences</h3>
       <button class="set-preferences" (click)="openPreferences()">Set Preferences</button>
 
-      <h3 class="subhead">Group Preference Profile</h3>
-      <button class="group-profile" (click)="openGroupProfile()">View Group Profile</button>
+      <h3 class="subhead" style="display:flex;align-items:center;gap:.5rem;">
+        Group Preference Profile
+        <span class="done-progress">{{ doneCount() }}/{{ groupMembers().length }} completed</span>
+      </h3>
+      <button class="group-profile" (click)="openGroupProfile()">
+        {{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}
+      </button>
+
+      <div *ngIf="showGroupProfile" class="prefs-panel">
+        <div *ngIf="prefsLoading" class="prefs-loading">Loading preferences…</div>
+        <div *ngIf="!prefsLoading && (!groupMembers().length)">No members yet.</div>
+
+        <ng-container *ngIf="!prefsLoading && groupMembers().length">
+          <article class="pref-card" *ngFor="let p of groupMembers()">
+            <header class="pref-hdr">
+              <img [src]="p.avatar_url || 'assets/default_pfp.jpg'" class="pref-ava" alt="" />
+              <div class="pref-name">
+                {{ p.display_name || p.name || p.email }}
+                <span *ngIf="p.__role === 'owner'" class="owner-pill">Owner</span>
+              </div>
+
+              <span
+                *ngIf="isDone(p.email)"
+                class="done-badge"
+                aria-label="Preferences completed"
+                title="Preferences completed"
+              >
+                ✔ Done
+              </span>
+            </header>
+
+            <ng-container *ngIf="prefsMap.get((p.email || '').toLowerCase()) as item; else noPrefs">
+              <div class="pref-rows" *ngIf="hasAnyPref(item?.prefs); else noPrefs">
+                <div class="pref-row" *ngIf="item.prefs?.activities?.length">
+                  <div class="k">Activities</div>
+                  <div class="v chips">
+                    <span class="chip" *ngFor="let a of (item.prefs?.activities || [])">{{ a }}</span>
+                  </div>
+                </div>
+
+                <div class="pref-row" *ngIf="item.prefs?.food?.length">
+                  <div class="k">Food</div>
+                  <div class="v chips">
+                    <span class="chip" *ngFor="let f of (item.prefs?.food || [])">{{ f }}</span>
+                  </div>
+                </div>
+
+                <div class="pref-row" *ngIf="item.prefs?.budget?.length">
+                  <div class="k">Budget</div>
+                  <div class="v chips">
+                    <span class="chip" *ngFor="let b of (item.prefs?.budget || [])">{{ b }}</span>
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+
+            <ng-template #noPrefs>
+              <div class="pref-empty">No preferences set yet.</div>
+            </ng-template>
+          </article>
+        </ng-container>
+      </div>
+
     </div>
   </section>
 
