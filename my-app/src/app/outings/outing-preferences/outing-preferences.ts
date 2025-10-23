@@ -157,41 +157,34 @@ export class OutingPreferences {
   }
 
   async submitInterests() {
-    const userId = sessionStorage.getItem('userId');
     const outingId = this.route.snapshot.paramMap.get('id');
+    const email = sessionStorage.getItem('userEmail');
 
-    if (!userId) {
+    if (!email) {
       this.toastr.error('You must be logged in to save preferences.');
       this.router.navigate(['/login']);
       return;
     }
 
-    // Backend call to store selections in DB
     try {
-      const res = await fetch(`${API}/api/outings/${outingId}/updateUserOutingPreferences`, {
-        method: 'POST',
+      const res = await fetch(`${API}/api/outings/${outingId}/preferences`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: userId,
-          outingId: outingId,
+          email,
           activities: this.selectedActivities,
           food: this.selectedFood,
           budget: this.selectedBudget,
         }),
       });
 
-      // Get back upon success
-      console.log(res);
-      if (res.ok) {
-        this.toastr.success('Preferences saved!');
-        this.router.navigate([`/outings/${outingId}`]);
-      } else {
-        console.error('Error saving preferences');
-        this.toastr.error('Failed to save preferences. Please try again.');
-      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Failed to save preferences');
+
+      this.toastr.success('Preferences saved!');
+      this.router.navigate([`/outings/${outingId}`]);
     } catch (e: any) {
-      console.error('Error saving preferences:', e);
-      this.toastr.error('Failed to save preferences. Please try again.');
+      this.toastr.error(e?.message || 'Failed to save preferences. Please try again.');
     }
   }
 
@@ -201,5 +194,48 @@ export class OutingPreferences {
 
   isLastPage(): boolean {
     return this.currentPage() === this.maxPages - 1;
+  }
+
+  ngOnInit() {
+    const outingId = this.route.snapshot.paramMap.get('id')!;
+    const email = sessionStorage.getItem('userEmail') || '';
+    if (outingId && email) {
+      this.loadExisting(outingId, email);
+    }
+  }
+
+  private async loadExisting(outingId: string, email: string) {
+    try {
+      const r = await fetch(
+        `${API}/api/outings/${encodeURIComponent(outingId)}/preferences?email=${encodeURIComponent(
+          email
+        )}`
+      );
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b?.error || 'Failed to load preferences');
+
+      this.selectedActivities = Array.isArray(b.activities) ? b.activities.slice() : [];
+      this.selectedFood = Array.isArray(b.food) ? b.food.slice() : [];
+      this.selectedBudget = Array.isArray(b.budget) ? b.budget.slice() : [];
+
+      // make sure any saved custom choices show up as chips
+      this.ensureOptions(0, this.selectedActivities);
+      this.ensureOptions(1, this.selectedFood);
+      this.ensureOptions(2, this.selectedBudget);
+    } catch (e: any) {
+      this.toastr.error(e?.message || 'Could not load saved preferences');
+    }
+  }
+
+  private ensureOptions(pageIndex: number, values: string[]) {
+    const base = this.pageOptions[pageIndex];
+    const seen = new Set(base.map((v) => v.toLowerCase()));
+    for (const v of values) {
+      const key = String(v).toLowerCase();
+      if (!seen.has(key)) {
+        base.push(v);
+        seen.add(key);
+      }
+    }
   }
 }
