@@ -22,6 +22,10 @@ export class HeaderComponent {
     this.inactivity.initFromServer(email);
   }
 
+  goHome() {
+    this.router.navigate(['/homepage']);
+  }
+
   toggleMenu() {
     this.menuOpen.update((v) => !v);
   }

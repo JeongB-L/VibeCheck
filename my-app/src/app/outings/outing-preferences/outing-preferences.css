@@ -1,264 +1,138 @@
+/* Container */
 .detail-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1rem 2rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+  display: grid;
+  gap: 24px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: #0f172a;
 }
 
+/* Page */
 .page-content {
-  flex: 1;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 18px 8px;
 }
 
-/* ---------- Header ---------- */
-.hdr {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.hdr h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.hdr .sub {
-  color: #666;
-  font-size: 0.95rem;
-}
-
-/* ---------- Layout ---------- */
-.layout {
+/* Header */
+.page-head {
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.page-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sub {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #dbeafe;
 }
 
-/* Left column scrolls normally */
-.left {
-  flex: 1 1 60%;
+/* Chip cloud */
+.interests-field {
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+.chip-cloud ::ng-deep .mdc-evolution-chip__focus-ring {
+  display: none;
 }
 
-/* Right column: sticky map */
-.right {
-  flex: 1 1 40%;
-  position: -webkit-sticky;
-  position: sticky;
-  top: 1rem;
-  align-self: flex-start;
-  height: fit-content;
+.chip-cloud ::ng-deep .mat-mdc-chip-set {
+  row-gap: 8px;
+  column-gap: 8px;
 }
-
-/* ---------- Tabs ---------- */
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.chip-cloud ::ng-deep .mat-mdc-chip-option {
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #fff;
+  color: #0f172a;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+  outline: none !important;
 }
-
-.tabs button {
-  border: 1px solid #ddd;
-  background: white;
-  border-radius: 9999px;
-  padding: 0.4rem 1rem;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s ease;
+.chip-cloud ::ng-deep .mat-mdc-chip-option:hover {
+  background: #f8fafc;
 }
-
-.tabs button.active {
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected {
   background: #1e88e5;
-  color: white;
+  color: #fff;
   border-color: #1e88e5;
 }
 
-/* ---------- Cards ---------- */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.card {
-  background: #fff;
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  margin: 0 auto 16px auto;
+/* Custom option field */
+.custom-option-field {
   width: 100%;
-  max-width: 420px;
 }
-
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-}
-
-.card img {
-  width: 100%;
-  height: 220px;
-  object-fit: cover;
-  display: block;
-  border: none;
-  margin: 0;
-}
-
-.card-body {
-  padding: 14px 18px;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-}
-
-.card-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: #111;
-  margin-bottom: 6px;
-}
-
-.card-subtitle {
-  color: #666;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.card-rating {
-  color: #009688;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.card:hover {
-  background: #f9fafb;
-  border-color: #ccc;
-}
-/* ---------- Map ---------- */
-.map {
-  width: 100%;
-  height: 620px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #f9fafb;
-}
-
-/* ---------- Responsive ---------- */
-@media (max-width: 900px) {
-  .cards {
-    grid-template-columns: 1fr;
-  }
-}
-
-.members-section {
-  border: 1px solid #eee;
-  border-radius: 12px;
-  padding: 16px 18px;
-  background: #fafafa;
-  margin-bottom: 1.5rem;
-}
-
-.members-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0 0 10px;
-}
-
-.subhead {
-  margin: 12px 0 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #333;
-}
-
-.member-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+.custom-option-field ::ng-deep .mdc-text-field--outlined {
   border-radius: 10px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+.custom-option-field ::ng-deep .mdc-notched-outline__leading,
+.custom-option-field ::ng-deep .mdc-notched-outline__trailing,
+.custom-option-field ::ng-deep .mdc-notched-outline__notch {
+  border-color: #e5e7eb !important;
+}
+.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__leading,
+.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__trailing,
+.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__notch {
+  border-color: #d1d5db !important;
 }
 
-.member-card.owner {
-  background: #e8f5e9;
-  border-color: #a5d6a7;
-}
-
-.member-ava {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-right: 10px;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.member-name {
-  flex: 1;
-  font-size: 15px;
-  color: #222;
-  font-weight: 500;
-}
-
-.remove-btn {
-  border: none;
-  background: #ef4444;
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.remove-btn:hover {
-  background: #dc2624;
-}
-
-.interests-field {
-  width: 100%;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.interests-field mat-chip-listbox {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.interests-field ::ng-deep .mat-mdc-chip-option {
-  border-radius: 20px;
-  padding: 8px 16px;
-}
-
-.interests-field ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected {
-  background-color: #1e88e5;
-  color: white;
-}
-
-/* ---------- Navigation Buttons ---------- */
+/* Actions */
 .navigation-buttons {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 2rem;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: #ffffffcc;
+  backdrop-filter: blur(6px);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
 }
 
-.navigation-buttons button {
-  flex: 1;
+/* Buttons (Material will style base; these tighten spacing) */
+.navigation-buttons :where(button[mat-flat-button], button[mat-stroked-button]) {
   min-width: 120px;
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 700;
 }
 
-.navigation-buttons button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Responsive */
+@media (max-width: 640px) {
+  .detail-wrap {
+    padding: 16px 12px 72px;
+  }
+  .page-head h1 {
+    font-size: 18px;
+  }
+  .step {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
 }

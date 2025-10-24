@@ -32,20 +32,30 @@
         <div class="member-empty">No members yet.</div>
       </ng-template>
 
-      <h3 class="subhead">Set your preferences</h3>
-      <button class="set-preferences" (click)="openPreferences()">Set Preferences</button>
+      <div class="prefs-toolbar">
+        <button
+          class="btn btn-primary"
+          (click)="openPreferences()"
+          aria-label="Set your preferences"
+        >
+          <span class="icon">⚙️</span>
+          <span>Set Preferences</span>
+        </button>
 
-      <h3 class="subhead" style="display:flex;align-items:center;gap:.5rem;">
-        Group Preference Profile
-        <span class="done-progress">{{ doneCount() }}/{{ groupMembers().length }} completed</span>
-      </h3>
-      <button class="group-profile" (click)="openGroupProfile()">
-        {{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}
-      </button>
+        <button
+          class="btn btn-outline"
+          (click)="openGroupProfile()"
+          aria-expanded="{{ showGroupProfile }}"
+        >
+          <span class="icon">👥</span>
+          <span>{{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}</span>
+          <span class="badge">{{ doneCount() }}/{{ groupMembers().length }}</span>
+        </button>
+      </div>
 
       <div *ngIf="showGroupProfile" class="prefs-panel">
         <div *ngIf="prefsLoading" class="prefs-loading">Loading preferences…</div>
-        <div *ngIf="!prefsLoading && (!groupMembers().length)">No members yet.</div>
+        <div *ngIf="!prefsLoading && !groupMembers().length">No members yet.</div>
 
         <ng-container *ngIf="!prefsLoading && groupMembers().length">
           <article class="pref-card" *ngFor="let p of groupMembers()">
@@ -71,21 +81,21 @@
                 <div class="pref-row" *ngIf="item.prefs?.activities?.length">
                   <div class="k">Activities</div>
                   <div class="v chips">
-                    <span class="chip" *ngFor="let a of (item.prefs?.activities || [])">{{ a }}</span>
+                    <span class="chip" *ngFor="let a of item.prefs?.activities || []">{{ a }}</span>
                   </div>
                 </div>
 
                 <div class="pref-row" *ngIf="item.prefs?.food?.length">
                   <div class="k">Food</div>
                   <div class="v chips">
-                    <span class="chip" *ngFor="let f of (item.prefs?.food || [])">{{ f }}</span>
+                    <span class="chip" *ngFor="let f of item.prefs?.food || []">{{ f }}</span>
                   </div>
                 </div>
 
                 <div class="pref-row" *ngIf="item.prefs?.budget?.length">
                   <div class="k">Budget</div>
                   <div class="v chips">
-                    <span class="chip" *ngFor="let b of (item.prefs?.budget || [])">{{ b }}</span>
+                    <span class="chip" *ngFor="let b of item.prefs?.budget || []">{{ b }}</span>
                   </div>
                 </div>
               </div>
@@ -97,7 +107,6 @@
           </article>
         </ng-container>
       </div>
-
     </div>
   </section>
 

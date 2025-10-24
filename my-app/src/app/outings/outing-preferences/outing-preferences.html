@@ -1,26 +1,46 @@
 <app-header></app-header>
 
 <div class="detail-wrap">
-  <!-- Page Content -->
-  <div class="page-content" *ngIf="currentPage() === 0">
-    <div class="hdr">
-      <h1>Page 1: Select Activities</h1>
-      <h1></h1>
-      <span class="sub">Please choose what activities interest you the most!</span>
-      <h1></h1>
-      <h1></h1>
+  <!-- Single block drives all 3 steps off currentPage() -->
+  <div class="page-content">
+    <!-- Header with dynamic title/sub + step -->
+    <div class="page-head">
+      <div>
+        <h1>
+          {{
+            [
+              'Page 1: Select Activities',
+              'Page 2: Select Food Preferences',
+              'Page 3: Select Your Budget Level'
+            ][currentPage()]
+          }}
+        </h1>
+        <p class="sub">
+          {{
+            [
+              'Please choose what activities interest you the most!',
+              'Choose what interests you most.',
+              'We will do our best to align with your budget!'
+            ][currentPage()]
+          }}
+        </p>
+      </div>
+      <span class="step">{{ currentPage() + 1 }} / {{ maxPages }}</span>
     </div>
-    <div class="interests-field">
-      <mat-chip-listbox #chipList [multiple]="true" aria-label="Attraction selection">
+
+    <!-- Chips -->
+    <div class="interests-field chip-cloud">
+      <mat-chip-listbox #chipList [multiple]="true" aria-label="preferences">
         <mat-chip-option
           *ngFor="let interest of currentOptions"
-          [selectable]="true"
-          [selected]="selectedActivities.includes(interest)"
+          [selected]="currentSelections.includes(interest)"
           (selectionChange)="toggleSelection($event, interest)"
         >
           {{ interest }}
         </mat-chip-option>
       </mat-chip-listbox>
+
+      <!-- Custom option -->
       <mat-form-field appearance="outline" class="custom-option-field">
         <mat-label>Add your own {{ currentType }}</mat-label>
         <input
@@ -41,99 +61,18 @@
     </div>
   </div>
 
-  <div class="page-content" *ngIf="currentPage() === 1">
-    <div class="hdr">
-      <h1>Page 2: Select Food Preferences</h1>
-      <h1></h1>
-      <span class="sub">Choose what interests you most.</span>
-      <h1></h1>
-    </div>
-    <div class="interests-field">
-      <mat-chip-listbox #chipList [multiple]="true" aria-label="Food & Experiences selection">
-        <mat-chip-option
-          *ngFor="let interest of currentOptions"
-          [selectable]="true"
-          [selected]="selectedFood.includes(interest)"
-          (selectionChange)="toggleSelection($event, interest)"
-        >
-          {{ interest }}
-        </mat-chip-option>
-      </mat-chip-listbox>
-      <mat-form-field appearance="outline" class="custom-option-field">
-        <mat-label>Add your own {{ currentType }}</mat-label>
-        <input
-          matInput
-          [(ngModel)]="newOptionInput"
-          placeholder="Type your option here..."
-          (keyup.enter)="addCustomOption()"
-        />
-        <button
-          mat-icon-button
-          matSuffix
-          (click)="addCustomOption()"
-          [disabled]="!newOptionInput.trim()"
-        >
-          <mat-icon>add</mat-icon>
-        </button>
-      </mat-form-field>
-    </div>
-  </div>
-
-  <div class="page-content" *ngIf="currentPage() === 2">
-    <div class="hdr">
-      <h1>Page 3: Select Your Budget Level</h1>
-      <h1></h1>
-      <span class="sub">We will do our best to align with your budget!</span>
-      <h1></h1>
-    </div>
-    <div class="interests-field">
-      <mat-chip-listbox #chipList [multiple]="true" aria-label="Activities & Nightlife selection">
-        <mat-chip-option
-          *ngFor="let interest of currentOptions"
-          [selectable]="true"
-          [selected]="selectedBudget.includes(interest)"
-          (selectionChange)="toggleSelection($event, interest)"
-        >
-          {{ interest }}
-        </mat-chip-option>
-      </mat-chip-listbox>
-      <mat-form-field appearance="outline" class="custom-option-field">
-        <mat-label>Add your own {{ currentType }}</mat-label>
-        <input
-          matInput
-          [(ngModel)]="newOptionInput"
-          placeholder="Type your option here..."
-          (keyup.enter)="addCustomOption()"
-        />
-        <button
-          mat-icon-button
-          matSuffix
-          (click)="addCustomOption()"
-          [disabled]="!newOptionInput.trim()"
-        >
-          <mat-icon>add</mat-icon>
-        </button>
-      </mat-form-field>
-    </div>
-  </div>
-
-  <!-- Navigation Buttons -->
-  <div class="navigation-buttons">
-    <button mat-raised-button color="accent" (click)="prevPage()" [disabled]="isFirstPage()">
-      Before
+  <!-- Navigation -->
+  <div class="navigation-buttons sticky-actions">
+    <button mat-stroked-button color="primary" (click)="prevPage()" [disabled]="isFirstPage()">
+      Back
     </button>
 
-    <button mat-raised-button color="primary" (click)="nextPage()" *ngIf="!isLastPage()">
-      After
+    <button mat-flat-button color="primary" (click)="nextPage()" *ngIf="!isLastPage()">
+      Continue
     </button>
 
-    <button mat-raised-button color="primary" (click)="submitInterests()" *ngIf="isLastPage()">
-      Submit
+    <button mat-flat-button color="primary" (click)="submitInterests()" *ngIf="isLastPage()">
+      Save preferences
     </button>
   </div>
-
-  <!-- Summary (Optional: Shows all selections)
-  <p *ngIf="selectedActivities.length">Activities: {{ selectedActivities.join(', ') }}</p>
-  <p *ngIf="selectedFood.length">Food: {{ selectedFood.join(', ') }}</p>
-  <p *ngIf="selectedBudget.length">Budget: {{ selectedBudget.join(', ') }}</p>-->
 </div>
