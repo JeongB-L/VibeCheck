@@ -39,15 +39,71 @@ h1 {
 }
 
 .secondary-btn {
-  background: #f3f4f6;     
-  color: #374151;             
-  border: 1px solid #d1d5db;  
-  border-radius: 8px;         
-  padding: 10px 14px;         
-  font-weight: 700;           
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .secondary-btn:hover {
-  background: #e5e7eb;       
+  background: #e5e7eb;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.btn:hover {
+  background: #f3f4f6;
+}
+.btn:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
+}
+.btn.full {
+  width: 100%;
+}
+.btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* primary (dark) */
+.btn.dark {
+  background: #111827;
+  color: #fff;
+  border-color: transparent;
+}
+.btn.dark:hover {
+  background: #0b1220;
+}
+
+/* danger */
+.btn.danger {
+  color: #b91c1c;
+  background: #fff;
+  border-color: #fecaca;
+}
+.btn.danger:hover {
+  background: #fee2e2;
+}
+
+/* optional: tidy inline button rows */
+.btn-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
