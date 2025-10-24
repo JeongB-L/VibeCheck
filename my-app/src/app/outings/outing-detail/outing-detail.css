@@ -307,8 +307,8 @@
 
 .done-progress {
   font-size: 0.85rem;
-  color: #0f5132;           
-  background: #e7f5ec;      
+  color: #0f5132;
+  background: #e7f5ec;
   border: 1px solid #b7e0c8;
   padding: 2px 8px;
   border-radius: 9999px;
@@ -322,15 +322,94 @@
 }
 
 .done-badge {
-  margin-left: auto;        
+  margin-left: auto;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #0f5a35;           
-  background: #e8f5e9;      
+  color: #0f5a35;
+  background: #e8f5e9;
   border: 1px solid #a5d6a7;
   border-radius: 9999px;
   padding: 4px 8px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.prefs-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 14px 0 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #ffffff;
+  color: #0f172a;
+  transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease,
+    transform 0.05s ease;
+}
+
+.btn:hover {
+  background: #f8fafc;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: #1e88e5;
+  color: #fff;
+  border-color: #1e88e5;
+}
+
+.btn:not(.btn-primary):hover {
+  background: #f8fafc;
+}
+
+/* keep primary button blue on hover */
+.btn-primary:hover {
+  background: #1e88e5;
+  filter: brightness(0.98);
+}
+
+.btn-outline {
+  background: #fff;
+  border-color: #e5e7eb;
+  color: #0f172a;
+}
+.btn-outline:hover {
+  background: #f9fafb;
+}
+
+.btn .icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #0ea5e9;
+  color: #fff;
+  margin-left: 6px;
+}
+
+.prefs-panel {
+  margin-top: 8px;
 }
