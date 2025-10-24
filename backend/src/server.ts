@@ -3,10 +3,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import apiRouter from "./routes";
-import authGoogleRouter from './routes/auth-google';
+import authGoogleRouter from "./routes/auth-google";
 import placesRouter from "./routes/places";
 import accountRouter from "./routes/account";
-import preferencesRouter from "./routes/preferences"
+import preferencesRouter from "./routes/preferences";
+import passwordRouter from "./routes/password-update";
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -26,7 +27,6 @@ app.use(
 app.use(express.json());
 app.use("/api/places", placesRouter);
 
-
 // Simple request logger (optional, but handy)
 app.use((req, _res, next) => {
   console.log(`${req.method} ${req.url}`);
@@ -36,7 +36,7 @@ app.use((req, _res, next) => {
 // Mount all API routes under /api
 app.use("/api", apiRouter);
 
-app.use('/api', authGoogleRouter);
+app.use("/api", authGoogleRouter);
 
 // === Google Maps JS Loader Proxy ===
 const GOOGLE_PLACES_KEY = process.env.GOOGLE_PLACES_KEY!;
@@ -52,9 +52,8 @@ app.get("/api/maps-js", (req, res) => {
 });
 
 app.use("/api/account", accountRouter);
-app.use('/api', preferencesRouter);
-
-
+app.use("/api", preferencesRouter);
+app.use("/api", passwordRouter);
 
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
