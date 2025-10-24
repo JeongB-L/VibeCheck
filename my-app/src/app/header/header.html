@@ -1,6 +1,15 @@
 <header class="header">
   <div class="left">
-    <img [src]="logoSrc" alt="VibeCheck logo" class="logo" />
+    <img
+      class="logo"
+      [src]="logoSrc"
+      alt="VibeCheck logo"
+      role="button"
+      tabindex="0"
+      (click)="goHome()"
+      (keydown.enter)="goHome()"
+      (keydown.space)="goHome()"
+    />
   </div>
 
   <div class="actions">
