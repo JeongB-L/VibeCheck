@@ -43,22 +43,17 @@ export class OutingPreferences {
 
   private readonly BASE_ACTIVITIES = [
     'Amusement Parks',
-    'Archery',
     'Art Classes',
     'Art Galleries',
-    'ATV Riding',
     'Billiards',
     'Biking',
     'Bird Watching',
-    'Board Games',
     'Boat Tours',
     'Bowling',
-    'Boxing Classes',
     'Brewery Tours',
     'Camping',
     'Canoeing',
     'Casino',
-    'Climbing Gym',
     'Concerts',
     'Cooking Classes',
     'Cycling',
@@ -66,7 +61,6 @@ export class OutingPreferences {
     'Escape Rooms',
     'Farmers Market',
     'Fishing',
-    'Fitness Classes',
     'Food Tours',
     'Go-Karting',
     'Golfing',
@@ -78,10 +72,9 @@ export class OutingPreferences {
     'Kayaking',
     'Laser Tag',
     'Live Theater',
-    'Mini Golf',
-    'Movie Night',
     'Museums',
-    'Paint & Sip',
+    'Must-see Attractions',
+    'Night Life',
     'Paintball',
     'Parks & Gardens',
     'Photography Walk',
@@ -89,25 +82,21 @@ export class OutingPreferences {
     'Pottery Classes',
     'Roller Skating',
     'Sailing',
+    'Shopping',
     'Skateboarding',
     'Skiing/Snowboarding',
     'Spa & Wellness',
     'Stargazing',
     'Surfing',
     'Swimming',
-    'Tennis',
-    'Thrifting',
-    'Trivia Night',
     'Virtual Reality Arcade',
-    'Volunteering',
     'Wine Tasting',
     'Yoga',
   ].sort((a, b) => a.localeCompare(b));
 
   private readonly BASE_CUISINES = [
     'African',
-    'American (New)',
-    'American (Traditional)',
+    'American',
     'Argentinian',
     'Asian Fusion',
     'Australian',
@@ -184,7 +173,7 @@ export class OutingPreferences {
     'Wings',
   ].sort((a, b) => a.localeCompare(b));
 
-  private readonly BASE_BUDGET = ['$', '$$', '$$$', '$$$$'];
+  private readonly BASE_BUDGET = ['Inexpensive', 'Moderate', 'Expensive', 'Very Expensive'];
 
   pageOptions = [[...this.BASE_ACTIVITIES], [...this.BASE_CUISINES], [...this.BASE_BUDGET]];
 
@@ -194,10 +183,17 @@ export class OutingPreferences {
 
   newOptionInput = ''; // Input for custom option
 
-  get currentOptions(): string[] {
-    const arr = this.pageOptions[this.currentPage()] || [];
-    return [...arr].sort((a, b) => a.localeCompare(b));
-  }
+  // add this helper
+isBudgetPage(): boolean {
+  return this.currentPage() === 2;
+}
+
+// update currentOptions so Budget page keeps original order
+get currentOptions(): string[] {
+  const idx = this.currentPage();
+  const arr = this.pageOptions[idx] || [];
+  return idx === 2 ? [...arr] : [...arr].sort((a, b) => a.localeCompare(b));
+}
 
   get currentSelections(): string[] {
     switch (this.currentPage()) {
@@ -239,15 +235,19 @@ export class OutingPreferences {
     }
   }
 
-  addCustomOption(): void {
-    const option = this.newOptionInput.trim();
-    if (option && !this.currentOptions.includes(option)) {
-      this.pageOptions[this.currentPage()].push(option);
-      this.currentSelections.push(option);
-    }
+// guard addCustomOption so it does nothing on Budget page
+addCustomOption(): void {
+  if (this.isBudgetPage()) {        // <-- no custom budget
     this.newOptionInput = '';
+    return;
   }
-
+  const option = this.newOptionInput.trim();
+  if (option && !this.currentOptions.includes(option)) {
+    this.pageOptions[this.currentPage()].push(option);
+    this.currentSelections.push(option);
+  }
+  this.newOptionInput = '';
+}
   prevPage(): void {
     this.currentPage.update((page) => Math.max(0, page - 1));
   }
