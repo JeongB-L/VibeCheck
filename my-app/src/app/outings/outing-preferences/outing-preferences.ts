@@ -1,13 +1,12 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { MatChipSelectionChange } from '@angular/material/chips';
+import { MatChipSelectionChange, MatChipsModule } from '@angular/material/chips';
 import { HeaderComponent } from '../../header/header';
 import { ToastrService } from 'ngx-toastr';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -32,15 +31,37 @@ const API = 'http://localhost:3001';
   styleUrls: ['./outing-preferences.css'],
 })
 export class OutingPreferences {
-  private http = inject(HttpClient);
   private toastr = inject(ToastrService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
-  // 0: Page 1, 1: Page 2, 2: Page 3
-  currentPage = signal(0);
-  maxPages = 3;
+  private norm(s: unknown) {
+    return String(s ?? '')
+      .trim()
+      .toLowerCase();
+  }
+  private uniq(list: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of list ?? []) {
+      const t = String(v).trim();
+      if (!t) continue;
+      const k = this.norm(t);
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(t);
+      }
+    }
+    return out;
+  }
 
+  // For [selected] bindings
+  isSelected(list: string[], value: string): boolean {
+    const k = this.norm(value);
+    return (list ?? []).some((v) => this.norm(v) === k);
+  }
+
+  // ---- base data ----
   private readonly BASE_ACTIVITIES = [
     'Amusement Parks',
     'Art Classes',
@@ -177,130 +198,89 @@ export class OutingPreferences {
 
   pageOptions = [[...this.BASE_ACTIVITIES], [...this.BASE_CUISINES], [...this.BASE_BUDGET]];
 
-  selectedActivities: string[] = []; // Page 0 selections
-  selectedFood: string[] = []; // Page 1 selections
-  selectedBudget: string[] = []; // Page 2 selections
+  selectedActivities: string[] = [];
+  selectedFood: string[] = [];
+  selectedBudget: string[] = [];
 
-  newOptionInput = ''; // Input for custom option
+  newActivityInput = '';
+  newFoodInput = '';
+  isLoaded = false;
 
-  // add this helper
-isBudgetPage(): boolean {
-  return this.currentPage() === 2;
-}
-
-// update currentOptions so Budget page keeps original order
-get currentOptions(): string[] {
-  const idx = this.currentPage();
-  const arr = this.pageOptions[idx] || [];
-  return idx === 2 ? [...arr] : [...arr].sort((a, b) => a.localeCompare(b));
-}
-
-  get currentSelections(): string[] {
-    switch (this.currentPage()) {
-      case 0:
-        return this.selectedActivities;
-      case 1:
-        return this.selectedFood;
-      case 2:
-        return this.selectedBudget;
-      default:
-        return [];
-    }
+  // ---- toggles ----
+  toggleActivities(ev: MatChipSelectionChange, val: string) {
+    this.updateSelection(
+      ev,
+      val,
+      this.selectedActivities,
+      (list) => (this.selectedActivities = list)
+    );
   }
 
-  get currentType(): string {
-    switch (this.currentPage()) {
-      case 0:
-        return 'activity';
-      case 1:
-        return 'cuisine';
-      case 2:
-        return 'budget level';
-      default:
-        return '';
-    }
+  toggleFood(ev: MatChipSelectionChange, val: string) {
+    this.updateSelection(ev, val, this.selectedFood, (list) => (this.selectedFood = list));
   }
 
-  toggleSelection(event: MatChipSelectionChange, interest: string): void {
-    const selections = this.currentSelections;
-    if (event.selected) {
-      if (!selections.includes(interest)) {
-        selections.push(interest);
-      }
+  toggleBudget(ev: MatChipSelectionChange, val: string) {
+    this.updateSelection(ev, val, this.selectedBudget, (list) => (this.selectedBudget = list));
+  }
+
+  private updateSelection(
+    ev: MatChipSelectionChange,
+    val: string,
+    current: string[],
+    setter: (v: string[]) => void
+  ) {
+    const k = this.norm(val);
+    if (ev.selected) {
+      if (!current.some((v) => this.norm(v) === k)) setter([...current, val.trim()]);
     } else {
-      const index = selections.indexOf(interest);
-      if (index >= 0) {
-        selections.splice(index, 1);
-      }
+      setter(current.filter((v) => this.norm(v) !== k));
     }
   }
 
-// guard addCustomOption so it does nothing on Budget page
-addCustomOption(): void {
-  if (this.isBudgetPage()) {        // <-- no custom budget
-    this.newOptionInput = '';
-    return;
-  }
-  const option = this.newOptionInput.trim();
-  if (option && !this.currentOptions.includes(option)) {
-    this.pageOptions[this.currentPage()].push(option);
-    this.currentSelections.push(option);
-  }
-  this.newOptionInput = '';
-}
-  prevPage(): void {
-    this.currentPage.update((page) => Math.max(0, page - 1));
+  // ---- custom adds ----
+  addCustomActivity() {
+    const opt = this.newActivityInput.trim();
+    if (!opt) return;
+    if (!this.pageOptions[0].some((v) => this.norm(v) === this.norm(opt)))
+      this.pageOptions[0].push(opt);
+    if (!this.selectedActivities.some((v) => this.norm(v) === this.norm(opt)))
+      this.selectedActivities.push(opt);
+    this.newActivityInput = '';
+    this.pageOptions[0].sort((a, b) => a.localeCompare(b));
   }
 
-  nextPage(): void {
-    this.currentPage.update((page) => Math.min(this.maxPages - 1, page + 1));
+  addCustomFood() {
+    const opt = this.newFoodInput.trim();
+    if (!opt) return;
+    if (!this.pageOptions[1].some((v) => this.norm(v) === this.norm(opt)))
+      this.pageOptions[1].push(opt);
+    if (!this.selectedFood.some((v) => this.norm(v) === this.norm(opt)))
+      this.selectedFood.push(opt);
+    this.newFoodInput = '';
+    this.pageOptions[1].sort((a, b) => a.localeCompare(b));
   }
 
-  async submitInterests() {
-    const outingId = this.route.snapshot.paramMap.get('id');
-    const email = sessionStorage.getItem('userEmail');
-
-    if (!email) {
-      this.toastr.error('You must be logged in to save preferences.');
-      this.router.navigate(['/login']);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API}/api/outings/${outingId}/preferences`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          activities: this.selectedActivities,
-          food: this.selectedFood,
-          budget: this.selectedBudget,
-        }),
-      });
-
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || 'Failed to save preferences');
-
-      this.toastr.success('Preferences saved!');
-      this.router.navigate([`/outings/${outingId}`]);
-    } catch (e: any) {
-      this.toastr.error(e?.message || 'Failed to save preferences. Please try again.');
-    }
-  }
-
-  isFirstPage(): boolean {
-    return this.currentPage() === 0;
-  }
-
-  isLastPage(): boolean {
-    return this.currentPage() === this.maxPages - 1;
-  }
-
+  // ---- lifecycle ----
   ngOnInit() {
     const outingId = this.route.snapshot.paramMap.get('id')!;
     const email = sessionStorage.getItem('userEmail') || '';
-    if (outingId && email) {
-      this.loadExisting(outingId, email);
+    if (outingId && email) this.loadExisting(outingId, email);
+    else this.isLoaded = true;
+  }
+
+  private ensureOptions(pageIndex: number, values: string[]) {
+    for (const v of values) {
+      const key = this.norm(v);
+      const exists = this.pageOptions[pageIndex].some((x) => this.norm(x) === key);
+      if (!exists) {
+        this.pageOptions[pageIndex].push(v.trim());
+      }
+    }
+
+    // keep Activities/Food sorted; Budget stays ordered
+    if (pageIndex !== 2) {
+      this.pageOptions[pageIndex].sort((a, b) => a.localeCompare(b));
     }
   }
 
@@ -314,28 +294,48 @@ addCustomOption(): void {
       const b = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(b?.error || 'Failed to load preferences');
 
-      this.selectedActivities = Array.isArray(b.activities) ? b.activities.slice() : [];
-      this.selectedFood = Array.isArray(b.food) ? b.food.slice() : [];
-      this.selectedBudget = Array.isArray(b.budget) ? b.budget.slice() : [];
+      // de-dupe + trim incoming
+      this.selectedActivities = this.uniq(Array.isArray(b.activities) ? b.activities : []);
+      this.selectedFood = this.uniq(Array.isArray(b.food) ? b.food : []);
+      this.selectedBudget = this.uniq(Array.isArray(b.budget) ? b.budget : []);
 
-      // make sure any saved custom choices show up as chips
+      // make sure all saved selections show up as chips
       this.ensureOptions(0, this.selectedActivities);
       this.ensureOptions(1, this.selectedFood);
       this.ensureOptions(2, this.selectedBudget);
     } catch (e: any) {
       this.toastr.error(e?.message || 'Could not load saved preferences');
+    } finally {
+      this.isLoaded = true;
     }
   }
 
-  private ensureOptions(pageIndex: number, values: string[]) {
-    const base = this.pageOptions[pageIndex];
-    const seen = new Set(base.map((v) => v.toLowerCase()));
-    for (const v of values) {
-      const key = String(v).toLowerCase();
-      if (!seen.has(key)) {
-        base.push(v);
-        seen.add(key);
-      }
+  async submitInterests() {
+    const outingId = this.route.snapshot.paramMap.get('id');
+    const email = sessionStorage.getItem('userEmail');
+    if (!email) {
+      this.toastr.error('You must be logged in.');
+      this.router.navigate(['/login']);
+      return;
+    }
+    const payload = {
+      email,
+      activities: this.uniq(this.selectedActivities),
+      food: this.uniq(this.selectedFood),
+      budget: this.uniq(this.selectedBudget),
+    };
+    try {
+      const res = await fetch(`${API}/api/outings/${outingId}/preferences`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Failed to save');
+      this.toastr.success('Preferences saved!');
+      this.router.navigate([`/outings/${outingId}`]);
+    } catch (e: any) {
+      this.toastr.error(e?.message || 'Save failed');
     }
   }
 }
