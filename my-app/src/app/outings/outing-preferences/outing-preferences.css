@@ -31,7 +31,8 @@
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.sub {
+.sub,
+.section-sub {
   margin: 4px 0 0;
   color: #64748b;
   font-size: 13px;
@@ -49,6 +50,16 @@
   border: 1px solid #dbeafe;
 }
 
+/* Sections */
+.section {
+  margin-top: 18px;
+}
+.section-title {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 /* Chip cloud */
 .interests-field {
   margin-top: 12px;
@@ -56,7 +67,6 @@
   gap: 14px;
 }
 
-/* Ensure the chip set lays out cleanly with gaps */
 .chip-cloud ::ng-deep .mat-mdc-chip-set {
   row-gap: 8px;
   column-gap: 8px;
@@ -64,23 +74,21 @@
   flex-wrap: wrap;
 }
 
-/* Pretty capsule shape — full clickable area */
+/* Pretty capsule chips */
 .chip-cloud ::ng-deep .mat-mdc-chip-option {
   position: relative;
-  border-radius: 999px;                /* smooth pill */
-  padding: 8px 18px;                   /* balanced spacing */
-  background: #fff;                    /* white background */
-  border: 1.5px solid #94a3b8;         /* subtle neutral border */
-  color: #0f172a;                      /* dark text */
+  border-radius: 999px;
+  padding: 8px 18px;
+  background: #fff;
+  border: 1.5px solid #94a3b8;
+  color: #0f172a;
   font-weight: 600;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   outline: none !important;
   cursor: pointer;
   user-select: none;
-  --mdc-chip-container-height: 40px;   /* fixed height for stable shape */
+  --mdc-chip-container-height: 40px;
 }
-
-/* The MDC "action" is the real clickable surface — stretch it */
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action {
   display: flex;
   align-items: center;
@@ -89,65 +97,50 @@
   height: 100%;
   border-radius: inherit;
 }
-
-/* Remove the default Material focus ring */
 .chip-cloud ::ng-deep .mdc-evolution-chip__focus-ring {
   display: none;
 }
-
-/* Hover state — subtle gray background */
 .chip-cloud ::ng-deep .mat-mdc-chip-option:hover {
   background: #f1f5f9;
 }
-
-/* Selected state — keep same shape, invert color */
 .chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected {
-  background: #1e88e5;   /* blue fill */
-  color: #ffffff !important;        /* white text */
-  border-color: #1e88e5; /* same border color */
+  background: #1e88e5;
+  color: #fff !important;
+  border-color: #1e88e5;
 }
-
-/* Force white label when selected */
 .chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected,
 .chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__action,
 .chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__cell,
 .chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__text-label {
   color: #fff !important;
 }
-
-/* Also make the ✓ checkmark white */
-.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__checkmark-path {
+.chip-cloud
+  ::ng-deep
+  .mat-mdc-chip-option.mat-mdc-chip-selected
+  .mdc-evolution-chip__checkmark-path {
   stroke: #fff !important;
 }
-/* Make sure entire chip remains clickable */
 .chip-cloud ::ng-deep .mat-mdc-chip-option,
 .chip-cloud ::ng-deep .mat-mdc-chip-option * {
   pointer-events: auto;
 }
-
-/* Optional — better font smoothing */
 .chip-cloud ::ng-deep .mat-mdc-chip-option {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-
-/* Make every internal layer honor the pill radius */
 .chip-cloud ::ng-deep .mat-mdc-chip-option {
   border-radius: 999px !important;
-  overflow: hidden;              /* clip ripple/overlay to the pill */
+  overflow: hidden;
   box-sizing: border-box;
 }
-
-/* Ripple + action + cell + pseudo elements adopt the same radius */
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__ripple,
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action,
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__cell {
   border-radius: inherit;
 }
-
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action::before,
 .chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action::after {
-  border-radius: inherit;        /* MDC ripple pseudo-elements */
+  border-radius: inherit;
 }
 
 /* Custom option field */
@@ -164,7 +157,7 @@
 }
 .custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__leading,
 .custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__trailing,
-.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__notch {
+.custom-option-field ::ng-deep .mdc-notched-outline__notch {
   border-color: #d1d5db !important;
 }
 
@@ -183,8 +176,6 @@
   border-radius: 12px;
   padding: 10px;
 }
-
-/* Buttons (Material will style base; these tighten spacing) */
 .navigation-buttons :where(button[mat-flat-button], button[mat-stroked-button]) {
   min-width: 120px;
   height: 40px;
