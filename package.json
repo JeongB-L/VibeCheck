@@ -2,9 +2,12 @@
   "dependencies": {
     "@angular/google-maps": "^20.2.7",
     "@fortawesome/fontawesome-free": "^7.1.0",
-    "@googlemaps/js-api-loader": "^2.0.1"
+    "@googlemaps/js-api-loader": "^2.0.1",
+    "openai": "^6.7.0"
   },
   "devDependencies": {
-    "@types/google.maps": "^3.58.1"
+    "@types/google.maps": "^3.58.1",
+    "@types/node": "^24.9.2",
+    "typescript": "^5.9.3"
   }
 }
