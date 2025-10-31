@@ -847,11 +847,16 @@ router.post("/generate-outing", async (req, res) => {
     console.log(" - Saving generated plans to database");
     const { data: savedPlan, error: saveErr } = await db
       .from("outing_plans")
-      .insert({
-        outing_id: outingId,
-        plans: JSON.stringify(generatedPlans),
-        created_at: new Date().toISOString(),
-      })
+      .upsert(
+        {
+          outing_id: outingId,
+          plans: JSON.stringify(generatedPlans),
+          created_at: new Date().toISOString(),
+        },
+
+        // Overwrite if outing_id already exists
+        { onConflict: "outing_id" }
+      )
       .select("id")
       .single();
 
