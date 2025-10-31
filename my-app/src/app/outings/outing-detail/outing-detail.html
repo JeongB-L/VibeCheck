@@ -51,6 +51,20 @@
           <span>{{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}</span>
           <span class="badge">{{ doneCount() }}/{{ groupMembers().length }}</span>
         </button>
+
+        <button class="btn btn-outline" (click)="generateOuting()" [disabled]="generating()">
+          <span class="icon">⚡</span>
+          <span *ngIf="!generating(); else generatingText">Generate Outing</span>
+
+          <ng-template #generatingText>
+            <div class="loading-wrapper" title="Generating... it will take at most 5 minutes.">
+              <span>Generating...</span>
+              <div class="loading-bar">
+                <div class="progress-fill"></div>
+              </div>
+            </div>
+          </ng-template>
+        </button>
       </div>
 
       <div *ngIf="showGroupProfile" class="prefs-panel">

@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { supabase as db } from "../lib/supabase";
 import { publicUrlFromPath } from "../utils/storage";
+import openAI, { OpenAI } from "openai";
 
 const router = Router();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 function normEmail(e?: string) {
   const v = (e || "").trim().toLowerCase();
@@ -637,6 +642,238 @@ router.post("/outings/:id/updateUserOutingPreferences", async (req, res) => {
   } catch (e: any) {
     console.error("Error updating user outing preferences:", e);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/generate-outing", async (req, res) => {
+  console.log("=== POST /api/generate-outing START ===");
+  // 1. Get all user preferences from the database based on current outing
+
+  const { outingId } = req.body;
+  if (!outingId) {
+    return res.status(400).json({ error: "outingId is required" });
+  }
+
+  // 2. Get the outing date from the database
+  const outing = await getOuting(outingId);
+  if (!outing) {
+    return res.status(404).json({ error: "Outing not found" });
+  }
+
+  const outingTitle = outing.title;
+  const outingLocation = outing.location;
+  const startDate = new Date(outing.start_date);
+  const endDate = new Date(outing.end_date);
+
+  // Validate dates
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return res.status(400).json({ error: "Invalid outing dates" });
+  }
+
+  // 2.1 Get all user preferences for this outing
+  try {
+    // 2.1.1 Get all member user_ids for the outing
+    console.log(" - Fetching outing members for outingId:", outingId);
+    const { data: memberRows, error: mErr } = await db
+      .from("outing_members")
+      .select("user_id")
+      .eq("outing_id", outingId);
+
+    if (mErr) return res.status(500).json({ error: mErr.message });
+
+    // include the creator as participant as well
+    const memberIds = (memberRows || []).map((r: any) => r.user_id);
+    const userIds = Array.from(new Set([...memberIds, outing.creator_id]));
+
+    // 2.1.2 Fetch preferences for those user_ids for this outing
+    if (!userIds.length) {
+      req.body.userPreferences = [];
+    } else {
+      const { data: prefsRows, error: pErr } = await db
+        .from("outing_preferences")
+        .select("user_id, activities, food, budget")
+        .eq("outing_id", outingId)
+        .in("user_id", userIds);
+
+      if (pErr) return res.status(500).json({ error: pErr.message });
+
+      // normalize into a map and ensure default shapes for missing prefs
+      const prefsMap = new Map(
+        (prefsRows || []).map((p: any) => [p.user_id, p])
+      );
+
+      const userPreferences = userIds.map((uid) => ({
+        user_id: uid,
+        preferences: prefsMap.get(uid) || {
+          activities: [],
+          food: [],
+          budget: [],
+        },
+      }));
+
+      req.body.userPreferences = userPreferences;
+    }
+  } catch (err: any) {
+    console.error("Failed to load outing preferences", err);
+
+    return res
+      .status(500)
+      .json({ error: err?.message || "Failed to load preferences" });
+  }
+
+  // 3. Generate an outing plan based on preferences and date
+  // 		a. write a prompt for openAI api
+  console.log(" - Generating outing plan via OpenAI for outingId:", outingId);
+  let prompt = `You are a helpful travel planner. Generate 3 detailed outing plans for the following group outing, balancing preferences for fairness:
+  
+  Outing Title: ${outingTitle}
+  Location: ${outingLocation}
+  Start Date: ${
+    startDate.toISOString().split("T")[0]
+  } (assume full day unless specified)
+  End Date: ${
+    endDate.toISOString().split("T")[0]
+  } (assume full day unless specified)
+  
+  Group Preferences (aggregated from all participants):
+  ${JSON.stringify(req.body.userPreferences, null, 2)}
+  
+  Create 3 alternative day-by-day itineraries that incorporate the group's preferred activities, food options, and budget considerations. For each plan, ensure a timeline-based structure with dated activities and meals. Compute a fairness score for each user (0-100%) based on how much of their individual preferences (activities, food, budget) are reflected in the plan—higher scores mean better balance across the group.
+  
+  Structure the output strictly as JSON with this schema:
+  {
+	"plans": [
+	  {
+		"title": "plan1",
+		"overview": "Brief summary of the plan",
+		"itinerary": [
+		  {
+			"date": "YYYY-MM-DD",
+			"timeline": [
+			  {
+				"time": "e.g., 9:00 AM - 12:00 PM",
+				"type": "activity",
+				"description": "Detailed activity",
+				"location": "Specific spot in ${outingLocation}",
+				"cost_estimate": "Budget-friendly estimate per person",
+			  },
+			  {
+				"time": "e.g., 12:00 PM - 1:00 PM",
+				"type": "meal",
+				"description": "Food suggestion",
+				"cuisine": "Matching group prefs",
+				"cost_estimate": "Per person",
+			  }
+			]
+		  }
+		],
+		"total_budget_estimate": "Overall group estimate",
+		"fairness_scores": {
+		  "user_id1": 85, // Example: percentage (0-100) for each user_id from preferences
+		  "user_id2": 92
+		  // ... for all users
+		},
+		"tips": "Additional suggestions"
+	  },
+	  {
+		"title": "plan2",
+		"overview": "Brief summary of the plan",
+		// ... same structure as plan1
+	  },
+	  {
+		"title": "plan3",
+		"overview": "Brief summary of the plan",
+		// ... same structure as plan1
+	  }
+	]
+  }
+  
+	Ensure each plan is fun, feasible for the location and dates,
+	varies in focus (e.g., one budget-heavy, one adventure-focused),
+	and maximizes overall fairness. Keep it realistic and engaging.`;
+
+  //		b. call openAI api with the prompt
+  console.log(" - Sending prompt to OpenAI API");
+  try {
+    const completion = await openai.chat.completions.create({
+      // This takes at least 20 seconds.
+      // TODO: maybe add a cancel generating outing.
+      model: "gpt-5-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert itinerary planner specializing in group outings with fairness optimization.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const rawResponse = completion.choices[0]?.message?.content;
+    if (!rawResponse) {
+      throw new Error("No response from OpenAI");
+    }
+    console.log(" - OpenAI response received");
+    //console.log("Raw OpenAI Response:", rawResponse);
+
+    console.log(" - Parsing OpenAI response");
+    //    c. parse the response from OpenAI api
+    let generatedPlans;
+    try {
+      generatedPlans = JSON.parse(rawResponse);
+    } catch (parseErr) {
+      console.error("Failed to parse OpenAI response as JSON:", parseErr);
+
+      // Fallback: Treat as plain text if JSON fails
+      generatedPlans = {
+        plans: [
+          {
+            title: "plan1",
+            overview: rawResponse,
+            itinerary: [],
+            total_budget_estimate: "TBD",
+            fairness_scores: {},
+            tips: "Plan generated; review for details.",
+          },
+        ],
+      };
+    }
+
+    // 4. Save all the generated outing plans to db and map it with the current outing
+    console.log(" - Saving generated plans to database");
+    const { data: savedPlan, error: saveErr } = await db
+      .from("outing_plans")
+      .insert({
+        outing_id: outingId,
+        plans: JSON.stringify(generatedPlans),
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (saveErr) {
+      console.error("Failed to save plan to DB:", saveErr);
+      return res.status(500).json({ error: "Failed to save generated plan" });
+    }
+
+    console.log(" - Generated outing plan saved with ID:", savedPlan.id);
+    // 5. Return the generated outing plan to the client
+    res.json({
+      success: true,
+      plans: generatedPlans.plans,
+      plan_id: savedPlan.id,
+    });
+    console.log("=== POST /api/generate-outing END ===");
+  } catch (apiErr: any) {
+    console.error("OpenAI API Error:", apiErr);
+    return res.status(500).json({
+      error: "Failed to generate outing plan",
+      details: apiErr.message,
+    });
   }
 });
 

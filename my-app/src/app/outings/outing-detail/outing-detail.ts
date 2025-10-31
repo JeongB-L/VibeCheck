@@ -13,6 +13,7 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HeaderComponent } from '../../header/header';
 import { ToastrService } from 'ngx-toastr';
 import { Router } from '@angular/router';
+import { ChangeDetectorRef } from '@angular/core';
 
 const API = 'http://localhost:3001';
 
@@ -59,7 +60,7 @@ type PrefEntry = { email: string; user_id: string | null; prefs: Prefs | null };
   styleUrls: ['./outing-detail.css'],
 })
 export class OutingDetail implements OnInit, AfterViewInit {
-  constructor(private toast: ToastrService, router: Router) {}
+  constructor(private toast: ToastrService, router: Router, private cdr: ChangeDetectorRef) {}
 
   trackById(_i: number, item: RecItem) {
     return item.id;
@@ -91,6 +92,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
   outing = signal<Outing | null>(null);
   loading = signal<boolean>(true);
   tab = signal<TabKey>('food');
+  generating = signal<boolean>(false);
 
   items = signal<RecItem[]>([]);
   selectedId = signal<string | null>(null);
@@ -355,7 +357,11 @@ export class OutingDetail implements OnInit, AfterViewInit {
     if (!outingId) return;
 
     const emails = people
-      .map(p => String(p.email || '').trim().toLowerCase())
+      .map((p) =>
+        String(p.email || '')
+          .trim()
+          .toLowerCase()
+      )
       .filter(Boolean);
 
     if (!emails.length) return;
@@ -375,9 +381,12 @@ export class OutingDetail implements OnInit, AfterViewInit {
         this.prefsMap.set(key, item);
       });
 
-       console.log('[group]', this.groupMembers().map(p => p.email));
-        console.log('[prefs keys]', Array.from(this.prefsMap.keys()));
-    // ^ this shows who we asked for and whose prefs we actually got
+      console.log(
+        '[group]',
+        this.groupMembers().map((p) => p.email)
+      );
+      console.log('[prefs keys]', Array.from(this.prefsMap.keys()));
+      // ^ this shows who we asked for and whose prefs we actually got
     } catch (err) {
       console.error('Failed to load preferences', err);
       this.toast.error('Failed to load preferences');
@@ -414,7 +423,6 @@ export class OutingDetail implements OnInit, AfterViewInit {
     window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
   }
 
-
   groupMembers(): Array<any> {
     const seen = new Set<string>();
     const list: any[] = [];
@@ -430,7 +438,9 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
     // then the rest of the members
     for (const m of this.members || []) {
-      const e = String(m.email || '').trim().toLowerCase();
+      const e = String(m.email || '')
+        .trim()
+        .toLowerCase();
       if (e && !seen.has(e)) {
         list.push({ ...m, __role: 'member' });
         seen.add(e);
@@ -446,11 +456,39 @@ export class OutingDetail implements OnInit, AfterViewInit {
     const entry = this.prefsMap.get(String(email).toLowerCase());
     if (!entry || !entry.prefs) return false;
     const p = entry.prefs;
-    return !!((p.activities?.length) || (p.food?.length) || (p.budget?.length));
+    return !!(p.activities?.length || p.food?.length || p.budget?.length);
   }
 
   // How many in the group are done
   doneCount(): number {
     return this.groupMembers().reduce((n, m) => n + (this.isDone(m.email) ? 1 : 0), 0);
+  }
+
+  // send request to generate outing in the backend
+  async generateOuting() {
+    const o = this.outing();
+    if (!o) return;
+    if (this.generating()) return;
+    this.generating.set(true);
+    console.log('Generating outing for outing ID:', o.id);
+
+    try {
+      const res = await fetch(`${API}/api/generate-outing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // For now just gotta send the outing ID; should be enough; TODO: include more if needed
+        body: JSON.stringify({ outingId: o.id }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Failed to generate outing');
+      this.toast.success('Outing generated successfully!');
+    } catch (err: any) {
+      this.toast.error(err?.message || 'Error generating outing');
+      this.cdr.detectChanges();
+    } finally {
+      this.generating.set(false);
+      this.cdr.detectChanges();
+    }
   }
 }

@@ -302,7 +302,7 @@ router.get("/profile/history", async (req, res) => {
     .select("*")
     .eq("user_id", user.user_id)
     .order("history_timestamp", { ascending: false })
-    .limit(50);
+    .limit(10);
 
   if (hErr) return res.status(500).json({ error: hErr.message });
 
