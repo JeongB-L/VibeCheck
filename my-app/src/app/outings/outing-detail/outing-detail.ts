@@ -20,6 +20,43 @@ const API = 'http://localhost:3001';
 // google maps global (loaded by a <script> in index.html)
 declare const google: any;
 
+type PlanStop = {
+  time?: string;
+  type?: 'activity' | 'meal' | 'break' | 'transfer' | string;
+  name?: string;
+  address?: string;
+  categories?: string[];
+  matches?: string[];
+  priceRange?: string | null;
+  description?: string;
+  cost_estimate?: string;
+  notes?: string;
+};
+
+type PlanDay = { date?: string; timeline?: PlanStop[] };
+type GeneratedPlan = {
+  planId?: string;
+  title?: string;
+  name?: string;
+  badge?: string[];
+  overview?: string;
+  itinerary: PlanDay[];
+  total_budget_estimate?: string;
+  fairness_scores?: Record<string, number>;
+  avgFairnessIndex?: number | null;
+  summary?: {
+    durationHours?: number;
+    totalDistanceKm?: number;
+    avgFairnessIndex?: number;
+    satisfaction?: Record<string, number>;
+  };
+  tips?: string;
+};
+
+type PlansPayload = { city?: string; plans: GeneratedPlan[] };
+
+
+
 type Outing = {
   id: number;
   title: string;
@@ -65,6 +102,17 @@ export class OutingDetail implements OnInit, AfterViewInit {
   trackById(_i: number, item: RecItem) {
     return item.id;
   }
+
+// Which panel shows on the left
+leftView = signal<'recs' | 'plans'>('recs');
+
+// Keep recommendations in items(); keep plan stop pins separately:
+planPins = signal<RecItem[]>([]);
+
+plans = signal<GeneratedPlan[] | null>([]);
+activePlanIdx = signal<number>(0);
+resolving = signal<boolean>(false);
+
 
   // --- Members ---
   members: any[] = [];
@@ -139,6 +187,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
     await this.fetchOuting(id);
     await this.loadTab('food');
     if (this.isBrowser) this.showMap.set(true);
+
+    this.fetchGeneratedPlan(id); //GEN
   }
 
   async ngAfterViewInit() {
@@ -146,6 +196,144 @@ export class OutingDetail implements OnInit, AfterViewInit {
     await this.waitForMaps();
     this.ensureMap();
   }
+
+  //GEN 
+  private normalizeClient(payload: any): PlansPayload {
+  // Defensive client-side guard in case backend isn't updated.
+  if (!payload || typeof payload !== 'object') return { plans: [] };
+  const plans = Array.isArray(payload.plans) ? payload.plans : [];
+  for (const p of plans) {
+    if (!Array.isArray(p.itinerary)) p.itinerary = [];
+    for (const d of p.itinerary) {
+      if (!Array.isArray(d.timeline)) d.timeline = [];
+    }
+    if (!p.title && p.name) p.title = p.name;
+    if (!p.title) p.title = 'Plan';
+    if (!Array.isArray(p.badge)) p.badge = [];
+  }
+  return { city: payload.city || '', plans };
+}
+
+ private async fetchGeneratedPlan(outingId: number) {
+  try {
+    const r = await fetch(`${API}/api/outings/${outingId}/plan`);
+    if (!r.ok) return; // not generated yet
+    const body = await r.json();
+    const norm = this.normalizeClient(body);
+    this.plans.set(norm.plans);
+    if (norm.plans.length) {
+      this.activePlanIdx.set(0);
+      await this.resolveAndPlot(norm.plans[0]);
+    }
+  } catch (e) {
+    // noop; keep UI running
+  }
+}
+
+// NEW public wrapper so template can call it safely
+refreshPlans() {
+  const id = this.outing()?.id;
+  if (id) this.fetchGeneratedPlan(id);
+}
+
+private async resolveAndPlot(plan: GeneratedPlan) {
+  if (!this.isBrowser || !plan || !plan.itinerary?.length) {
+    this.planPins.set([]);
+    this.renderMarkers();           // redraw map (will show only recs if any)
+    this.fitAllPins();              // fit whatever pins exist
+    return;
+  }
+
+  const stops = plan.itinerary
+    .flatMap(d => d.timeline || [])
+    .filter(s => (s?.name || s?.address))
+    .map(s => ({ name: s.name ?? '', address: s.address ?? '' }))
+    .slice(0, 40);
+
+  if (!stops.length) {
+    this.planPins.set([]);
+    this.renderMarkers();
+    this.fitAllPins();
+    return;
+  }
+
+  this.resolving.set(true);
+  try {
+    const res = await fetch(`${API}/api/places/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stops }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error || 'resolve failed');
+
+    const look = new Map<string, any>();
+    for (const r of (body.results || [])) {
+      const k = `${(r.query?.name||'').trim()}|${(r.query?.address||'').trim()}`.toLowerCase();
+      look.set(k, r);
+    }
+
+    const resolved: RecItem[] = [];
+    for (const day of plan.itinerary) {
+      for (const s of (day.timeline || [])) {
+        const k = `${(s.name||'').trim()}|${(s.address||'').trim()}`.toLowerCase();
+        const hit = look.get(k);
+        if (hit?.lat != null && hit?.lng != null) {
+          resolved.push({
+            id: `${day.date ?? ''}|${s.time ?? ''}|${s.name ?? ''}`,
+            name: s.name ?? '(Unnamed)',
+            address: hit.address ?? s.address ?? '',
+            lat: hit.lat, lng: hit.lng,
+            photo: hit.photo ?? null,
+            type: s.type ?? 'activity',
+          });
+        }
+      }
+    }
+
+    this.planPins.set(resolved);
+    await this.waitForMaps();
+    this.ensureMap();
+    this.renderMarkers();   // ⬅️ now draws both recs + plan pins
+    this.fitAllPins();
+  } catch {
+    this.planPins.set([]);
+    this.renderMarkers();
+    this.fitAllPins();
+  } finally {
+    this.resolving.set(false);
+  }
+}
+
+
+setActivePlan(i: number) {
+  const all = this.plans();
+  if (!all || !all[i]) return;
+  this.activePlanIdx.set(i);
+  this.resolveAndPlot(all[i]);
+}
+
+
+openStopInMaps(s: PlanStop) {
+  const q = encodeURIComponent(`${s.name ?? ''} ${s.address ?? ''}`.trim());
+  if (!q) return;
+  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
+}
+
+
+  
+  private fitAllPins() {
+  if (!this.gmap) return;
+
+  const all = [...this.items(), ...this.planPins()];
+  if (!all.length) return;
+
+  const bounds = new google.maps.LatLngBounds();
+  for (const p of all) bounds.extend({ lat: p.lat, lng: p.lng });
+
+  if (!bounds.isEmpty()) this.gmap.fitBounds(bounds, 48);
+}
+
 
   // ---------- data ----------
   private get userEmail(): string | null {
@@ -244,7 +432,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
         await this.waitForMaps();
         this.ensureMap();
         this.renderMarkers();
-        this.fitMapBounds(data);
+        // this.fitMapBounds(data);
+        this.fitAllPins();
       }, 0);
     } catch (err: any) {
       this.items.set([]);
@@ -268,32 +457,63 @@ export class OutingDetail implements OnInit, AfterViewInit {
     }
   }
 
-  private renderMarkers() {
-    if (!this.gmap) return;
+private renderMarkers() {
+  if (!this.gmap) return;
 
-    // clear old
-    for (const m of this.gmarkers) m.setMap(null);
-    this.gmarkers = [];
-    this.markerById.clear();
+  // clear old markers
+  for (const m of this.gmarkers) m.setMap(null);
+  this.gmarkers = [];
+  this.markerById.clear();
 
-    // add new
-    for (const p of this.items()) {
-      const m = new google.maps.Marker({
-        position: { lat: p.lat, lng: p.lng },
-        title: p.name,
-        map: this.gmap,
-        icon: this.iconDefault,
-        zIndex: 1,
-      });
-      (m as any).__id = p.id;
-      this.gmarkers.push(m);
-      this.markerById.set(p.id, m);
+  // === RECOMMENDATIONS (red pins) ===
+  for (const p of this.items()) {
+    const m = new google.maps.Marker({
+      position: { lat: p.lat, lng: p.lng },
+      title: p.name,
+      map: this.gmap,
+      icon: this.iconDefault,   // red
+      zIndex: 1,
+    });
 
-      // map-side hover (optional)
-      m.addListener('mouseover', () => this.setActiveMarker(p.id));
-      m.addListener('mouseout', () => this.setActiveMarker(null));
-    }
+    // 🟢 store info directly on marker
+    (m as any).__id    = `rec:${p.id}`;
+    (m as any).__title = p.name ?? '(Unnamed)';
+    (m as any).__addr  = p.address ?? '';
+
+    this.gmarkers.push(m);
+    this.markerById.set(`rec:${p.id}`, m);
+
+    // event listeners
+    m.addListener('mouseover', () => this.setActiveMarker(`rec:${p.id}`));
+    m.addListener('mouseout',  () => this.setActiveMarker(null));
+    m.addListener('click',     () => this.setActiveMarker(`rec:${p.id}`));
   }
+
+  // === PLAN STOPS (blue pins) ===
+  for (const p of this.planPins()) {
+    const m = new google.maps.Marker({
+      position: { lat: p.lat, lng: p.lng },
+      title: p.name,
+      map: this.gmap,
+      icon: this.iconActive,    // blue
+      zIndex: 2,
+    });
+
+    // 🟢 same metadata pattern
+    (m as any).__id    = `plan:${p.id}`;
+    (m as any).__title = p.name ?? '(Unnamed)';
+    (m as any).__addr  = p.address ?? '';
+
+    this.gmarkers.push(m);
+    this.markerById.set(`plan:${p.id}`, m);
+
+    m.addListener('mouseover', () => this.setActiveMarker(`plan:${p.id}`));
+    m.addListener('mouseout',  () => this.setActiveMarker(null));
+    m.addListener('click',     () => this.setActiveMarker(`plan:${p.id}`));
+  }
+}
+
+
 
   private fitMapBounds(resp: RecResp) {
     if (!this.gmap) return;
@@ -311,36 +531,36 @@ export class OutingDetail implements OnInit, AfterViewInit {
   }
 
   private setActiveMarker(id: string | null) {
-    for (const m of this.gmarkers) {
-      const active = (m as any).__id === id;
-      if (active) {
-        m.setIcon(this.iconActive);
-        m.setZIndex(1000);
-        m.setOpacity(1);
-      } else {
-        m.setIcon(this.iconDefault);
-        m.setZIndex(1);
-        m.setOpacity(id ? 0.45 : 1); // dim others when one is active
-      }
-    }
-
-    // Info window content
-    if (id) {
-      const m = this.markerById.get(id);
-      if (m && this.info) {
-        const item = this.items().find((x) => x.id === id);
-        this.info.setContent(
-          `<div style="font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto;">
-           <div><strong>${item?.name ?? ''}</strong></div>
-           <div style="color:#666;margin-top:2px">${item?.address ?? ''}</div>
-         </div>`
-        );
-        this.info.open({ anchor: m, map: this.gmap, shouldFocus: false });
-      }
-    } else {
-      if (this.info) this.info.close();
-    }
+  for (const m of this.gmarkers) {
+    const active = (m as any).__id === id;
+    m.setIcon(active ? this.iconActive : this.iconDefault);
+    m.setZIndex(active ? 1000 : 1);
+    m.setOpacity(id ? (active ? 1 : 0.45) : 1);
   }
+
+  if (!id) { this.info?.close(); return; }
+
+  const m = this.markerById.get(id);
+  if (!m || !this.info) return;
+
+  const title = (m as any).__title || m.getTitle?.() || '(Unnamed)';
+  const addr  = (m as any).__addr  || '';
+
+  this.info.setContent(
+    `<div style="font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto">
+       <div><strong>${this.escapeHtml(title)}</strong></div>
+       ${addr ? `<div style="color:#666;margin-top:2px">${this.escapeHtml(addr)}</div>` : ''}
+     </div>`
+  );
+  this.info.open({ anchor: m, map: this.gmap, shouldFocus: false });
+}
+
+private escapeHtml(s: string) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c] as string)
+  );
+}
+
 
   async openGroupProfile() {
     this.showGroupProfile = !this.showGroupProfile;
@@ -411,12 +631,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
   }
 
   // ---------- UI handlers ----------
-  hoverItem(p: RecItem | null) {
-    const id = p?.id ?? null;
-    this.selectedId.set(id);
-    this.setActiveMarker(id);
-    if (p && this.gmap) this.gmap.panTo({ lat: p.lat, lng: p.lng });
-  }
+ hoverItem(p: RecItem | null) { const id = p?.id ?? null; this.selectedId.set(id); this.setActiveMarker(id); if (p && this.gmap) this.gmap.panTo({ lat: p.lat, lng: p.lng }); }
 
   openInMaps(p: RecItem) {
     const q = encodeURIComponent(`${p.name} ${p.address ?? ''}`);
@@ -483,6 +698,9 @@ export class OutingDetail implements OnInit, AfterViewInit {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || 'Failed to generate outing');
       this.toast.success('Outing generated successfully!');
+
+      await this.fetchGeneratedPlan(o.id);  //refersh 
+
     } catch (err: any) {
       this.toast.error(err?.message || 'Error generating outing');
       this.cdr.detectChanges();

@@ -33,20 +33,12 @@
       </ng-template>
 
       <div class="prefs-toolbar">
-        <button
-          class="btn btn-primary"
-          (click)="openPreferences()"
-          aria-label="Set your preferences"
-        >
+        <button class="btn btn-primary" (click)="openPreferences()" aria-label="Set your preferences">
           <span class="icon">⚙️</span>
           <span>Set Preferences</span>
         </button>
 
-        <button
-          class="btn btn-outline"
-          (click)="openGroupProfile()"
-          aria-expanded="{{ showGroupProfile }}"
-        >
+        <button class="btn btn-outline" (click)="openGroupProfile()" aria-expanded="{{ showGroupProfile }}">
           <span class="icon">👥</span>
           <span>{{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}</span>
           <span class="badge">{{ doneCount() }}/{{ groupMembers().length }}</span>
@@ -80,12 +72,8 @@
                 <span *ngIf="p.__role === 'owner'" class="owner-pill">Owner</span>
               </div>
 
-              <span
-                *ngIf="isDone(p.email)"
-                class="done-badge"
-                aria-label="Preferences completed"
-                title="Preferences completed"
-              >
+              <span *ngIf="isDone(p.email)" class="done-badge" aria-label="Preferences completed"
+                title="Preferences completed">
                 ✔ Done
               </span>
             </header>
@@ -123,39 +111,147 @@
       </div>
     </div>
   </section>
-
   <div class="layout">
-    <section class="left">
-      <nav class="tabs">
-        <button [class.active]="tab() === 'food'" (click)="loadTab('food')">Food & drink</button>
-        <button [class.active]="tab() === 'stay'" (click)="loadTab('stay')">Places to stay</button>
-        <button [class.active]="tab() === 'do'" (click)="loadTab('do')">Things to do</button>
-      </nav>
 
-      <div class="cards">
-        <article
-          class="card"
-          *ngFor="let p of items(); trackBy: trackById"
-          [class.active]="selectedId() === p.id"
-          (mouseenter)="hoverItem(p)"
-          (mouseleave)="hoverItem(null)"
-          (click)="openInMaps(p)"
-        >
-          <img
-            *ngIf="p.photo"
-            [src]="p.photo"
-            alt=""
-            class="thumb"
-            loading="lazy"
-            referrerpolicy="no-referrer"
-          />
-          <div class="card-body">
-            <div class="card-title">{{ p.name }}</div>
-            <div class="card-subtitle">{{ p.address }}</div>
-            <div class="card-rating">★ {{ p.rating?.toFixed(1) }} {{ p.priceText }}</div>
+
+
+    <section class="left">
+
+      <!-- Left column view switch -->
+      <nav class="left-switch">
+        <button [class.active]="leftView() === 'recs'" (click)="leftView.set('recs')">Recommendations</button>
+        <button [class.active]="leftView() === 'plans'" (click)="leftView.set('plans')">Outing Plans</button>
+      </nav>
+      <!-- Recommendations panel -->
+      <ng-container *ngIf="leftView() === 'recs'">
+        <nav class="tabs">
+          <button [class.active]="tab() === 'food'" (click)="loadTab('food')">Food & drink</button>
+          <button [class.active]="tab() === 'stay'" (click)="loadTab('stay')">Places to stay</button>
+          <button [class.active]="tab() === 'do'" (click)="loadTab('do')">Things to do</button>
+        </nav>
+
+        <div class="cards">
+          <article class="card" *ngFor="let p of items(); trackBy: trackById" [class.active]="selectedId() === p.id"
+            (mouseenter)="hoverItem(p)" (mouseleave)="hoverItem(null)" (click)="openInMaps(p)">
+            <img *ngIf="p.photo" [src]="p.photo" alt="" class="thumb" loading="lazy" referrerpolicy="no-referrer" />
+            <div class="card-body">
+              <div class="card-title">{{ p.name }}</div>
+              <div class="card-subtitle">{{ p.address }}</div>
+              <div class="card-rating">★ {{ p.rating?.toFixed(1) }} {{ p.priceText }}</div>
+            </div>
+          </article>
+        </div>
+      </ng-container>
+
+      <!-- ===== Generated Plans (ABOVE recommendations) ===== -->
+      <ng-container *ngIf="leftView() === 'plans'">
+        <section *ngIf="plans() as P" class="plans-wrap">
+          <div class="plans-hdr">
+            <h2>Generated Plans</h2>
+
+            <div class="plan-switcher" *ngIf="P.length; else noPlansYet">
+              <button *ngFor="let pl of P; let i = index" class="plan-tab" [class.active]="activePlanIdx() === i"
+                [disabled]="resolving()" (click)="setActivePlan(i)">
+                {{ pl.title || ('Plan ' + (i+1)) }}
+              </button>
+
+              <!-- manual reload from DB if needed -->
+              <button class="plan-refresh" (click)="refreshPlans()" [disabled]="resolving()">
+                Refresh
+              </button>
+            </div>
           </div>
-        </article>
-      </div>
+
+          <ng-container *ngIf="P.length; else noPlansYet">
+            <!-- bind active plan once -->
+            <ng-container *ngIf="P[activePlanIdx()] as A">
+              <div class="badges">
+                <span *ngFor="let b of (A.badge || [])" class="badge">{{ b }}</span>
+                <span *ngIf="A.total_budget_estimate" class="budget">
+                  Budget: {{ A.total_budget_estimate }}
+                </span>
+              </div>
+
+              <p class="overview" *ngIf="A.overview">{{ A.overview }}</p>
+
+              <!-- summary -->
+              <div class="summary" *ngIf="A.summary as S">
+                <div class="summary-card">
+                  <div class="k">Duration</div>
+                  <div class="v">{{ S.durationHours ?? '—' }} hrs</div>
+                </div>
+                <div class="summary-card">
+                  <div class="k">Distance</div>
+                  <div class="v">{{ S.totalDistanceKm ?? '—' }} km</div>
+                </div>
+                <div class="summary-card">
+                  <div class="k">Avg Fairness</div>
+                  <div class="v">
+                    {{ (S.avgFairnessIndex ?? (A.avgFairnessIndex ? A.avgFairnessIndex/100 : 0)) | number:'1.2-2' }}
+                  </div>
+                </div>
+                <div class="summary-card" *ngIf="P[activePlanIdx()]?.summary?.satisfaction as sat">
+                  <div class="k">Satisfaction</div>
+                  <div class="v">
+                    <div *ngFor="let kv of sat | keyvalue">
+                      {{ kv.key }}: {{ kv.value | number:'1.0-2' }}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- timeline -->
+              <div class="timeline-days">
+                <div class="day" *ngFor="let day of A.itinerary">
+                  <h3 class="day-title">{{ day.date }}</h3>
+                  <ol class="line">
+                    <li class="stop" *ngFor="let s of day.timeline">
+                      <span class="dot"></span>
+                      <div class="stop-row">
+                        <div class="time">{{ s.time || '' }}</div>
+                        <div class="content">
+                          <div class="title">
+                            <button class="link" (click)="openStopInMaps(s)">
+                              {{ s.name || '(Unnamed)' }}
+                            </button>
+                            <span class="pill" *ngIf="s.type">{{ s.type }}</span>
+                            <span class="pill soft" *ngIf="s.priceRange">{{ s.priceRange }}</span>
+                          </div>
+                          <div class="addr" *ngIf="s.address">{{ s.address }}</div>
+                          <div class="tags" *ngIf="(s.categories?.length ?? 0) > 0">
+                            #{{ (s.categories ?? []).join(' #') }}
+                          </div>
+
+                          <div class="chips" *ngIf="(s.matches?.length ?? 0) > 0">
+                            <span *ngFor="let m of (s.matches ?? [])" class="chip">{{ m }}</span>
+                          </div>
+                          <div class="small" *ngIf="s.description">{{ s.description }}</div>
+                          <div class="small" *ngIf="s.cost_estimate">{{ s.cost_estimate }}</div>
+                          <div class="small" *ngIf="s.notes">{{ s.notes }}</div>
+                        </div>
+                      </div>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
+              <div class="resolving" *ngIf="resolving()">Resolving map pins…</div>
+            </ng-container>
+          </ng-container>
+
+          <ng-template #noPlansYet>
+            <div class="no-plans">
+              No generated plans yet.
+              <button class="plan-refresh" (click)="refreshPlans()" [disabled]="generating() || resolving()">
+                Load saved plan
+              </button>
+            </div>
+          </ng-template>
+        </section>
+
+      </ng-container>
+
     </section>
 
     <!-- right: map (plain JS) -->

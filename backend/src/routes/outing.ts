@@ -3,6 +3,136 @@ import { supabase as db } from "../lib/supabase";
 import { publicUrlFromPath } from "../utils/storage";
 import openAI, { OpenAI } from "openai";
 
+// --- helpers: robust normalizer for GPT output ---
+type PlanStop = {
+  time?: string;
+  type?: string;
+  name?: string;
+  address?: string;
+  categories?: string[];
+  matches?: string[];
+  priceRange?: string | null;
+  description?: string;
+  cost_estimate?: string; // may exist in your saved data
+  notes?: string;
+};
+
+type PlanDay = { date?: string; timeline?: PlanStop[] };
+type GeneratedPlan = {
+  planId?: string;
+  title?: string;
+  name?: string; // sometimes the model uses 'name' instead of 'title'
+  badge?: string[];
+  overview?: string;
+  itinerary?: PlanDay[];
+  total_budget_estimate?: string;
+  fairness_scores?: Record<string, number>;
+  avgFairnessIndex?: number | null; // your saved example uses this (0-100)
+  summary?: {
+    durationHours?: number;
+    totalDistanceKm?: number;
+    avgFairnessIndex?: number; // 0-1 variant; normalize below
+    satisfaction?: Record<string, number>;
+  };
+  tips?: string;
+};
+
+type PlansPayload = { city?: string; plans?: GeneratedPlan[] };
+
+/** Coerce unknown model JSON -> consistent, safe shape for the client */
+function normalizePlans(raw: any): PlansPayload {
+  const out: PlansPayload = { city: "", plans: [] };
+  if (!raw || typeof raw !== "object") return out;
+
+  out.city = typeof raw.city === "string" ? raw.city : "";
+
+  const rawPlans: any[] = Array.isArray(raw.plans) ? raw.plans : [];
+  const plans: GeneratedPlan[] = [];
+
+  for (const rp of rawPlans) {
+    const plan: GeneratedPlan = {
+      planId: typeof rp.planId === "string" ? rp.planId : undefined,
+      title: typeof rp.title === "string" ? rp.title : undefined,
+      name: typeof rp.name === "string" ? rp.name : undefined,
+      badge: Array.isArray(rp.badge) ? rp.badge.filter((x: any) => typeof x === "string") : [],
+      overview: typeof rp.overview === "string" ? rp.overview : "",
+      total_budget_estimate:
+        typeof rp.total_budget_estimate === "string" ? rp.total_budget_estimate : undefined,
+      fairness_scores:
+        rp.fairness_scores && typeof rp.fairness_scores === "object" ? rp.fairness_scores : {},
+      avgFairnessIndex:
+        typeof rp.avgFairnessIndex === "number" ? rp.avgFairnessIndex : null,
+      tips: typeof rp.tips === "string" ? rp.tips : "",
+      itinerary: [],
+      summary: undefined,
+    };
+
+    // Summary (either shape)
+    if (rp.summary && typeof rp.summary === "object") {
+      const s = rp.summary;
+      plan.summary = {
+        durationHours: typeof s.durationHours === "number" ? s.durationHours : undefined,
+        totalDistanceKm: typeof s.totalDistanceKm === "number" ? s.totalDistanceKm : undefined,
+        avgFairnessIndex:
+          typeof s.avgFairnessIndex === "number" ? s.avgFairnessIndex : undefined, // 0..1 version
+        satisfaction:
+          s.satisfaction && typeof s.satisfaction === "object" ? s.satisfaction : undefined,
+      };
+    }
+
+    // Itinerary
+    const rawDays: any[] = Array.isArray(rp.itinerary) ? rp.itinerary : [];
+    for (const d of rawDays) {
+      const day: PlanDay = { date: "", timeline: [] };
+      day.date = typeof d.date === "string" ? d.date : "";
+
+      const rawStops: any[] = Array.isArray(d.timeline) ? d.timeline : [];
+      for (const st of rawStops) {
+        const stop: PlanStop = {
+          time: typeof st.time === "string" ? st.time : "",
+          type: typeof st.type === "string" ? st.type : (st.name ? "activity" : "break"),
+          name: typeof st.name === "string" ? st.name : "",
+          address: typeof st.address === "string" ? st.address : "",
+          categories: Array.isArray(st.categories)
+            ? st.categories.filter((x: any) => typeof x === "string")
+            : [],
+          matches: Array.isArray(st.matches)
+            ? st.matches.filter((x: any) => typeof x === "string")
+            : [],
+          priceRange:
+            typeof st.priceRange === "string" ? st.priceRange :
+            typeof st.cost_estimate === "string" && /\$+|free/i.test(st.cost_estimate)
+              ? (st.cost_estimate.match(/\$+/)?.[0] ?? "Free")
+              : null,
+          description: typeof st.description === "string" ? st.description : "",
+          cost_estimate: typeof st.cost_estimate === "string" ? st.cost_estimate : undefined,
+          notes: typeof st.notes === "string" ? st.notes : undefined,
+        };
+
+        // Skip stops with neither name nor address
+        if (!stop.name && !stop.address) continue;
+        day.timeline!.push(stop);
+      }
+
+      // Skip empty days
+      if (!day.timeline!.length) continue;
+      plan.itinerary!.push(day);
+    }
+
+    // Ensure we have a title
+    if (!plan.title && plan.name) plan.title = plan.name;
+    if (!plan.title) plan.title = plan.planId || "Plan";
+
+    // Keep only usable plans
+    if (plan.itinerary && plan.itinerary.length) plans.push(plan);
+  }
+
+  out.plans = plans;
+  return out;
+}
+
+
+
 const router = Router();
 
 const openai = new OpenAI({
@@ -645,7 +775,76 @@ router.post("/outings/:id/updateUserOutingPreferences", async (req, res) => {
   }
 });
 
+// Reuse the same query logic from router.get("/outings/:id/members")
+async function getOutingMembers(outingId: number) {
+  // 1️⃣ Get outing (to identify owner)
+  const { data: outing, error: oErr } = await db
+    .from("outings")
+    .select("creator_id")
+    .eq("id", outingId)
+    .maybeSingle();
+  if (oErr) throw new Error(oErr.message);
+  if (!outing) throw new Error("Outing not found");
+
+  // 2️⃣ Get all members
+  const { data: rows, error: mErr } = await db
+    .from("outing_members")
+    .select("user_id, role, joined_at")
+    .eq("outing_id", outingId);
+  if (mErr) throw new Error(mErr.message);
+
+  const memberIds = rows.map((r) => r.user_id);
+  const allIds = Array.from(new Set([...memberIds, outing.creator_id]));
+
+  // 3️⃣ Fetch user data
+  const { data: users, error: uErr } = await db
+    .from("users")
+    .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
+    .in("user_id", allIds);
+  if (uErr) throw new Error(uErr.message);
+
+  const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
+
+  const ownerUser = byId.get(outing.creator_id);
+  const owner = ownerUser
+    ? {
+        user_id: ownerUser.user_id,
+        email: ownerUser.email,
+        name: [ownerUser.first_name, ownerUser.last_name].filter(Boolean).join(" "),
+        display_name: ownerUser.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
+        role: "owner",
+        joined_at: null,
+        is_owner: true,
+      }
+    : null;
+
+  const members = rows
+    .filter((r) => r.user_id !== outing.creator_id)
+    .map((r) => {
+      const u: any = byId.get(r.user_id) || {};
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+      return {
+        user_id: r.user_id,
+        email: u.email || null,
+        name,
+        display_name: u.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+        role: r.role ?? "member",
+        joined_at: r.joined_at,
+        is_owner: false,
+      };
+    });
+
+  return { owner, members };
+}
+
+
+
 router.post("/generate-outing", async (req, res) => {
+
+
+
   console.log("=== POST /api/generate-outing START ===");
   // 1. Get all user preferences from the database based on current outing
 
@@ -669,11 +868,19 @@ router.post("/generate-outing", async (req, res) => {
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     return res.status(400).json({ error: "Invalid outing dates" });
   }
-
+  let participantNames: string[] = [];
   // 2.1 Get all user preferences for this outing
   try {
     // 2.1.1 Get all member user_ids for the outing
     console.log(" - Fetching outing members for outingId:", outingId);
+    const { owner, members } = await getOutingMembers(outingId);
+  participantNames = [owner, ...(members ?? [])]
+    .filter(Boolean)
+    .map((p: any) =>
+      p.display_name || p.name || (p.email ? p.email.split("@")[0] : "Unknown")
+    );
+    console.log(participantNames) 
+
     const { data: memberRows, error: mErr } = await db
       .from("outing_members")
       .select("user_id")
@@ -684,6 +891,7 @@ router.post("/generate-outing", async (req, res) => {
     // include the creator as participant as well
     const memberIds = (memberRows || []).map((r: any) => r.user_id);
     const userIds = Array.from(new Set([...memberIds, outing.creator_id]));
+
 
     // 2.1.2 Fetch preferences for those user_ids for this outing
     if (!userIds.length) {
@@ -734,40 +942,50 @@ router.post("/generate-outing", async (req, res) => {
   End Date: ${
     endDate.toISOString().split("T")[0]
   } (assume full day unless specified)
-  
+
+  Participants names:
+  ${JSON.stringify(participantNames, null, 2)}
   Group Preferences (aggregated from all participants):
   ${JSON.stringify(req.body.userPreferences, null, 2)}
   
-  Create 3 alternative day-by-day itineraries that incorporate the group's preferred activities, food options, and budget considerations. For each plan, ensure a timeline-based structure with dated activities and meals. Compute a fairness score for each user (0-100%) based on how much of their individual preferences (activities, food, budget) are reflected in the plan—higher scores mean better balance across the group.
+  Create 3 alternative day-by-day itineraries that incorporate the group's preferred activities, food options, and budget considerations. For each plan, ensure a timeline-based structure with dated activities and meals. Compute a fairness score for each user (0-100%) based on how much of their individual preferences (activities, food, budget) are reflected in the plan—higher scores mean better balance across the group. Also include total average fairness score (0-100%). Also include badges for itinerary like "Highest Thrill", "Art Forward" that best suit each itinerary. 
   
   Structure the output strictly as JSON with this schema:
   {
+  "city": "city name"
 	"plans": [
 	  {
-		"title": "plan1",
-		"overview": "Brief summary of the plan",
+		"planId": "plan1",
+		"name": "art day",
+    "badge": ["Moderate Cost", "Art Thrill", ...],
+    "overview": "Brief summary of the plan",
 		"itinerary": [
 		  {
 			"date": "YYYY-MM-DD",
 			"timeline": [
 			  {
 				"time": "e.g., 9:00 AM - 12:00 PM",
-				"type": "activity",
+        "name": "Art Institute of Chicago"
+        "address": "111 S Michigan Ave, Chicago, IL 60603"
+				"categories": ["Biking", "Outdoor"],
 				"description": "Detailed activity",
-				"location": "Specific spot in ${outingLocation}",
+        "matches": ["username1", "username2"],
 				"cost_estimate": "Budget-friendly estimate per person",
 			  },
 			  {
 				"time": "e.g., 12:00 PM - 1:00 PM",
-				"type": "meal",
+        "name": "MingHin Cuisine (Chinatown)",
+				"address": "2168 S Archer Ave, Chicago, IL 60616",
+        "categories": ["Dim Sum", "Food"],
 				"description": "Food suggestion",
-				"cuisine": "Matching group prefs",
+				"matches": ["username3"],
 				"cost_estimate": "Per person",
 			  }
 			]
 		  }
 		],
 		"total_budget_estimate": "Overall group estimate",
+    "avgFairnessIndex": 86
 		"fairness_scores": {
 		  "user_id1": 85, // Example: percentage (0-100) for each user_id from preferences
 		  "user_id2": 92
@@ -777,12 +995,10 @@ router.post("/generate-outing", async (req, res) => {
 	  },
 	  {
 		"title": "plan2",
-		"overview": "Brief summary of the plan",
 		// ... same structure as plan1
 	  },
 	  {
 		"title": "plan3",
-		"overview": "Brief summary of the plan",
 		// ... same structure as plan1
 	  }
 	]
@@ -790,7 +1006,7 @@ router.post("/generate-outing", async (req, res) => {
   
 	Ensure each plan is fun, feasible for the location and dates,
 	varies in focus (e.g., one budget-heavy, one adventure-focused),
-	and maximizes overall fairness. Keep it realistic and engaging.`;
+	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences.`;
 
   //		b. call openAI api with the prompt
   console.log(" - Sending prompt to OpenAI API");
@@ -881,5 +1097,38 @@ router.post("/generate-outing", async (req, res) => {
     });
   }
 });
+
+// GET /api/outings/:id/plan  -> normalized payload
+router.get("/outings/:id/plan", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) return res.status(400).json({ error: "Invalid id" });
+
+    const { data, error } = await db
+      .from("outing_plans")
+      .select("plans, created_at, id, outing_id")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "No saved plan for this outing" });
+
+    let raw = data.plans;
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { raw = {}; }
+    }
+
+    const normalized = normalizePlans(raw);
+    return res.json({
+      plan_id: data.id,
+      outing_id: data.outing_id,
+      created_at: data.created_at,
+      ...normalized,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
 
 export default router;
