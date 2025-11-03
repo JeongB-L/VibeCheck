@@ -6,7 +6,6 @@ import openAI, { OpenAI } from "openai";
 // --- helpers: robust normalizer for GPT output ---
 type PlanStop = {
   time?: string;
-  type?: string;
   name?: string;
   address?: string;
   categories?: string[];
@@ -90,7 +89,6 @@ function normalizePlans(raw: any): PlansPayload {
       for (const st of rawStops) {
         const stop: PlanStop = {
           time: typeof st.time === "string" ? st.time : "",
-          type: typeof st.type === "string" ? st.type : (st.name ? "activity" : "break"),
           name: typeof st.name === "string" ? st.name : "",
           address: typeof st.address === "string" ? st.address : "",
           categories: Array.isArray(st.categories)

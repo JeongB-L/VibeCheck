@@ -147,7 +147,7 @@
       <ng-container *ngIf="leftView() === 'plans'">
         <section *ngIf="plans() as P" class="plans-wrap">
           <div class="plans-hdr">
-            <h2>Generated Plans</h2>
+            <h2>Outing Plans</h2>
 
             <div class="plan-switcher" *ngIf="P.length; else noPlansYet">
               <button *ngFor="let pl of P; let i = index" class="plan-tab" [class.active]="activePlanIdx() === i"
@@ -155,10 +155,7 @@
                 {{ pl.title || ('Plan ' + (i+1)) }}
               </button>
 
-              <!-- manual reload from DB if needed -->
-              <button class="plan-refresh" (click)="refreshPlans()" [disabled]="resolving()">
-                Refresh
-              </button>
+             
             </div>
           </div>
 
@@ -215,7 +212,7 @@
                             <button class="link" (click)="openStopInMaps(s)">
                               {{ s.name || '(Unnamed)' }}
                             </button>
-                            <span class="pill" *ngIf="s.type">{{ s.type }}</span>
+        
                             <span class="pill soft" *ngIf="s.priceRange">{{ s.priceRange }}</span>
                           </div>
                           <div class="addr" *ngIf="s.address">{{ s.address }}</div>

@@ -22,7 +22,6 @@ declare const google: any;
 
 type PlanStop = {
   time?: string;
-  type?: 'activity' | 'meal' | 'break' | 'transfer' | string;
   name?: string;
   address?: string;
   categories?: string[];
@@ -285,7 +284,7 @@ private async resolveAndPlot(plan: GeneratedPlan) {
             address: hit.address ?? s.address ?? '',
             lat: hit.lat, lng: hit.lng,
             photo: hit.photo ?? null,
-            type: s.type ?? 'activity',
+  
           });
         }
       }
