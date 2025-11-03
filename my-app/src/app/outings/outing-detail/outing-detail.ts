@@ -209,6 +209,15 @@ resolving = signal<boolean>(false);
     if (!p.title && p.name) p.title = p.name;
     if (!p.title) p.title = 'Plan';
     if (!Array.isArray(p.badge)) p.badge = [];
+
+        // ✅ Preserve + normalize what we care about
+    if (typeof p.avgFairnessIndex === 'number' && p.avgFairnessIndex > 0 && p.avgFairnessIndex <= 1) {
+      p.avgFairnessIndex = Math.round(p.avgFairnessIndex * 100);
+    }
+    if (p.fairness_scores && typeof p.fairness_scores !== 'object') p.fairness_scores = {};
+    if (typeof p.tips !== 'string') p.tips = '';
+  
+
   }
   return { city: payload.city || '', plans };
 }

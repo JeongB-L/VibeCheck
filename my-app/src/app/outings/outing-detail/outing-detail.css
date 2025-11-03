@@ -780,3 +780,19 @@
   .chip { background: #0b1a3a; border-color: #1e3a8a; color: #bfdbfe; }
   .no-plans { background: #0f172a; border-color: #1f2937; color: #cbd5e1; }
 }
+.fairness { margin: 8px 0 16px; }
+.fairness .avg { margin-bottom: 8px; }
+.fairness .avg-num { font-weight: 600; }
+
+.fairness .score-row {
+  display: grid; grid-template-columns: 1fr 6fr auto;
+  align-items: center; gap: 8px; margin: 6px 0;
+}
+.fairness .who { font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fairness .bar { background: #eee; border-radius: 999px; height: 8px; position: relative; overflow: hidden; }
+.fairness .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #1976d2; }
+.fairness .val { font-variant-numeric: tabular-nums; font-size: 12px; color: #444; }
+
+.tips { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e6ebf2; }
+.tips h4 { margin: 0 0 6px; font-size: 14px; }
+.tips p { margin: 0; color: #334155; font-size: 13px; }

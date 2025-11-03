@@ -985,8 +985,8 @@ router.post("/generate-outing", async (req, res) => {
 		"total_budget_estimate": "Overall group estimate",
     "avgFairnessIndex": 86
 		"fairness_scores": {
-		  "user_id1": 85, // Example: percentage (0-100) for each user_id from preferences
-		  "user_id2": 92
+		  "username1": 85, // Example: percentage (0-100) for each user_id from preferences
+		  "username2": 92
 		  // ... for all users
 		},
 		"tips": "Additional suggestions"
@@ -1004,7 +1004,7 @@ router.post("/generate-outing", async (req, res) => {
   
 	Ensure each plan is fun, feasible for the location and dates,
 	varies in focus (e.g., one budget-heavy, one adventure-focused),
-	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences.`;
+	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences. Also use the particpant names given above for fairness score and matches`;
 
   //		b. call openAI api with the prompt
   console.log(" - Sending prompt to OpenAI API");

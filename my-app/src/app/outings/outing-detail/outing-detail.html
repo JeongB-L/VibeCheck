@@ -155,7 +155,7 @@
                 {{ pl.title || ('Plan ' + (i+1)) }}
               </button>
 
-             
+
             </div>
           </div>
 
@@ -171,32 +171,22 @@
 
               <p class="overview" *ngIf="A.overview">{{ A.overview }}</p>
 
-              <!-- summary -->
-              <div class="summary" *ngIf="A.summary as S">
-                <div class="summary-card">
-                  <div class="k">Duration</div>
-                  <div class="v">{{ S.durationHours ?? '—' }} hrs</div>
-                </div>
-                <div class="summary-card">
-                  <div class="k">Distance</div>
-                  <div class="v">{{ S.totalDistanceKm ?? '—' }} km</div>
-                </div>
-                <div class="summary-card">
-                  <div class="k">Avg Fairness</div>
-                  <div class="v">
-                    {{ (S.avgFairnessIndex ?? (A.avgFairnessIndex ? A.avgFairnessIndex/100 : 0)) | number:'1.2-2' }}
-                  </div>
-                </div>
-                <div class="summary-card" *ngIf="P[activePlanIdx()]?.summary?.satisfaction as sat">
-                  <div class="k">Satisfaction</div>
-                  <div class="v">
-                    <div *ngFor="let kv of sat | keyvalue">
-                      {{ kv.key }}: {{ kv.value | number:'1.0-2' }}
-                    </div>
-                  </div>
+              <!-- === Fairness panel === -->
+              <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
+                <div class="avg">
+                  <strong>Avg Fairness: </strong>
+                  <span class="avg-num">{{ (A.avgFairnessIndex ?? 0) | number:'1.0-0' }}%</span>
                 </div>
 
+                <div class="scores" *ngIf="A.fairness_scores">
+                  <div class="score-row" *ngFor="let kv of (A.fairness_scores | keyvalue)">
+                    <span class="who">{{ kv.key }}</span>
+                    <span class="bar"><span class="fill" [style.width.%]="kv.value"></span></span>
+                    <span class="val">{{ kv.value }}%</span>
+                  </div>
+                </div>
               </div>
+
 
               <!-- timeline -->
               <div class="timeline-days">
@@ -212,7 +202,7 @@
                             <button class="link" (click)="openStopInMaps(s)">
                               {{ s.name || '(Unnamed)' }}
                             </button>
-        
+
                             <span class="pill soft" *ngIf="s.priceRange">{{ s.priceRange }}</span>
                           </div>
                           <div class="addr" *ngIf="s.address">{{ s.address }}</div>
@@ -232,6 +222,13 @@
                   </ol>
                 </div>
               </div>
+
+               <!-- === Tips === -->
+              <div class="tips" *ngIf="A.tips">
+                <h4>Tips</h4>
+                <p>{{ A.tips }}</p>
+              </div>
+
 
               <div class="resolving" *ngIf="resolving()">Resolving map pins…</div>
             </ng-container>
