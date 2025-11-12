@@ -45,9 +45,14 @@
           </button>
           <div class="sub">{{ f.email }}</div>
         </div>
-        <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
+         <div class="actions-row">
+            <button class="btn" (click)="goChat(f)">Message</button>
+            <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
+          </div>
       </li>
     </ul>
+
+    
   </section>
 
   <!-- Search / Send Request -->

@@ -228,4 +228,9 @@ export class FriendsPage implements OnInit {
   viewUser(u: { user_id: string }) {
     this.router.navigate(['/users', u.user_id]);
   }
+
+  goChat(f: { email: string }) {
+    this.router.navigate(['/chat'], { queryParams: { friendEmail: f.email } });
+  }
+
 }
