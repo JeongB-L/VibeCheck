@@ -150,6 +150,9 @@ export class ChatPage implements OnInit {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || 'Could not load messages');
       this.messages.set(body?.messages || []);
+
+      await this.markReadUpToLast();
+
     } catch (e: any) {
       this.error.set(e?.message || 'Network error');
     } finally {
@@ -179,6 +182,9 @@ export class ChatPage implements OnInit {
       arr.push(body.message as Msg);
       this.messages.set(arr);
       this.draft.set('');
+
+      await this.markReadUpToLast();
+
     } catch (e: any) {
       this.toastr.error(e?.message || 'Send failed', 'Chat');
     }
@@ -190,4 +196,24 @@ export class ChatPage implements OnInit {
       img.src = 'assets/default_pfp.jpg';
     }
   }
+
+  private async markReadUpToLast() {
+    const tid = this.threadId();
+    const lastId = this.messages().at(-1)?.id;
+    if (!tid || !lastId) return;
+
+    try {
+        await fetch(`http://localhost:3001/api/chat/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            meEmail: this.meEmail,
+            threadId: tid,
+            upToMessageId: lastId,
+        }),
+        });
+    } catch {
+    }
+}
+
 }

@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { HeaderComponent } from '../header/header';
 import { ToastrService } from 'ngx-toastr';
 
-type Tab = 'current' | 'search' | 'pending';
+type Tab = 'current' | 'search' | 'pending' | 'messages';
 
 interface FriendRow {
   user_id: string;
@@ -13,6 +13,26 @@ interface FriendRow {
   name?: string;
   display_name?: string | null;
   avatar_path?: string | null;
+}
+
+interface ThreadRow {
+  thread_id: number;
+  last_message_at: string | null;
+  unread_count: number;
+  other_user: {
+    user_id: string;
+    email: string;
+    display_name?: string | null;
+    name?: string;
+    avatar_path?: string | null;
+  };
+  last_message: null | {
+    id: number;
+    thread_id: number;
+    sender_id: string;
+    body: string;
+    created_at: string;
+  };
 }
 
 const API = 'http://localhost:3001/api';
@@ -37,6 +57,7 @@ export class FriendsPage implements OnInit {
   friends = signal<FriendRow[]>([]);
   incoming = signal<FriendRow[]>([]);
   outgoing = signal<FriendRow[]>([]);
+  threads = signal<ThreadRow[]>([]); 
 
   // search/add
   searchEmail = signal<string>('');
@@ -58,6 +79,9 @@ export class FriendsPage implements OnInit {
     if (t === 'pending') {
       this.loadPending();
       this.loadOutgoing();
+    }
+    if (t === 'messages') {
+      this.loadThreads(); 
     }
   }
 
@@ -99,6 +123,19 @@ export class FriendsPage implements OnInit {
     } catch (e: any) {
       this.errorMsg.set(e?.message || 'Network error');
       this.toastr.error(this.errorMsg()!, 'Outgoing requests');
+    }
+  }
+
+  // load threads list
+  async loadThreads() {
+    try {
+      const res = await fetch(`${API}/chat/threads?email=${encodeURIComponent(this.meEmail)}`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Failed to load messages');
+      this.threads.set(body?.threads || []);
+    } catch (e: any) {
+      this.errorMsg.set(e?.message || 'Network error');
+      this.toastr.error(this.errorMsg()!, 'Messages');
     }
   }
 
@@ -211,12 +248,20 @@ export class FriendsPage implements OnInit {
     }
   }
 
-  defaultAvatar = 'assets/default_pfp.jpg';
+  // ---------- Navigation helpers ----------
+  goChatWith(f: FriendRow) {
+    this.router.navigate(['/chat'], { queryParams: { friendEmail: f.email } });
+  }
 
+  goChatThread(threadId: number) {
+    this.router.navigate(['/chat'], { queryParams: { threadId } });
+  }
+
+  // avatars
+  defaultAvatar = 'assets/default_pfp.jpg';
   avatarUrl(u: { avatar_path?: string | null }) {
     return u?.avatar_path || this.defaultAvatar;
   }
-
   onImgError(ev: Event) {
     const img = ev.target as HTMLImageElement;
     if (img && img.src.indexOf(this.defaultAvatar) === -1) {
@@ -228,9 +273,4 @@ export class FriendsPage implements OnInit {
   viewUser(u: { user_id: string }) {
     this.router.navigate(['/users', u.user_id]);
   }
-
-  goChat(f: { email: string }) {
-    this.router.navigate(['/chat'], { queryParams: { friendEmail: f.email } });
-  }
-
 }

@@ -23,6 +23,14 @@
       >
         Pending Requests
       </button>
+      <button
+        class="tab"
+        [class.active]="tab() === 'messages'"
+        (click)="setTab('messages')"
+        role="tab"
+      >
+        Messages
+      </button>
     </nav>
   </header>
 
@@ -45,14 +53,12 @@
           </button>
           <div class="sub">{{ f.email }}</div>
         </div>
-         <div class="actions-row">
-            <button class="btn" (click)="goChat(f)">Message</button>
-            <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
-          </div>
+        <div class="actions-row">
+          <button class="btn" (click)="goChatWith(f)">Message</button>
+          <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
+        </div>
       </li>
     </ul>
-
-    
   </section>
 
   <!-- Search / Send Request -->
@@ -113,6 +119,37 @@
           <div class="sub">Request sent — {{ u.email }}</div>
         </div>
         <button class="ghost" (click)="cancel(u.email)">Cancel</button>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Messages -->
+  <section *ngIf="tab() === 'messages'" class="card">
+    <h2 class="h2">Messages</h2>
+    <div class="muted" *ngIf="!threads().length">No conversations yet.</div>
+
+    <ul class="list" *ngIf="threads().length">
+      <li class="friend" *ngFor="let t of threads(); let i = index">
+        <div class="avatar-box">
+          <img
+            [src]="t.other_user.avatar_path || 'assets/default_pfp.jpg'"
+            alt=""
+            class="avatar-img"
+            (error)="onImgError($event)"
+          />
+        </div>
+        <div class="meta">
+          <button class="linklike name" (click)="goChatThread(t.thread_id)">
+            {{ t.other_user.display_name || t.other_user.name || t.other_user.email }}
+          </button>
+          <div class="sub">
+            {{ t.last_message?.body || 'No messages yet' }}
+          </div>
+        </div>
+        <div class="actions-row">
+          <button class="btn" (click)="goChatThread(t.thread_id)">Open</button>
+          <span class="ghost" *ngIf="t.unread_count > 0">Unread: {{ t.unread_count }}</span>
+        </div>
       </li>
     </ul>
   </section>
