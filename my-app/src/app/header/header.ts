@@ -22,6 +22,10 @@ export class HeaderComponent {
     this.inactivity.initFromServer(email);
   }
 
+  goHome() {
+    this.router.navigate(['/homepage']);
+  }
+
   toggleMenu() {
     this.menuOpen.update((v) => !v);
   }
@@ -50,5 +54,10 @@ export class HeaderComponent {
     sessionStorage.removeItem('userId');
     this.closeMenu();
     this.router.navigate(['/login']);
+  }
+
+  goFriends() {
+    this.closeMenu();
+    this.router.navigate(['/friends']);
   }
 }

@@ -1,14 +1,15 @@
 import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { HeaderComponent } from '../header/header';
 
 @Component({
   selector: 'app-homepage',
   standalone: true,
-  imports: [CommonModule, HeaderComponent],
+  imports: [CommonModule, RouterModule, HeaderComponent],
   templateUrl: './homepage.html',
-  styleUrl: './homepage.css',
+  styleUrls: ['./homepage.css'],
 })
 export class Homepage {
   userEmail = sessionStorage.getItem('userEmail') || '';
@@ -17,27 +18,13 @@ export class Homepage {
 
   constructor(private router: Router) {}
 
-  toggleMenu() {
-    this.menuOpen.update((v) => !v);
-  }
-  closeMenu() {
-    this.menuOpen.set(false);
-  }
+  toggleMenu() { this.menuOpen.update(v => !v); }
+  closeMenu()  { this.menuOpen.set(false); }
 
-  goProfile() {
-    this.closeMenu();
-    this.router.navigate(['/settings/profile']);
-  }
-  goSettings() {
-    this.closeMenu();
-    this.router.navigate(['/settings']);
-  }
-  goMyOutings() {
-    this.router.navigate(['/outings']);
-  }
-  goContact() {
-    this.router.navigate(['/contact']);
-  }
+  goProfile()   { this.closeMenu(); this.router.navigate(['/settings/profile']); }
+  goSettings()  { this.closeMenu(); this.router.navigate(['/settings']); }
+  goMyOutings() { this.router.navigate(['/outings']); }
+  goContact()   { this.router.navigate(['/contact']); }
 
   logout() {
     sessionStorage.removeItem('authToken');

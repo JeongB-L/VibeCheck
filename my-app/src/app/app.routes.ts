@@ -12,6 +12,11 @@ import { SettingsPage } from './settings/settings';
 import { OutingDetail } from './outings/outing-detail/outing-detail';
 import { ProfileHistory } from './settings/profile-history/profile-history';
 import { ChangePassword } from './settings/change-password/change-password';
+import { FriendsPage } from './friends/friends';
+import { UserProfilePage } from './user-profile/user-profile';
+import { OutingPreferences } from './outings/outing-preferences/outing-preferences';
+import { ChatPage } from './chat/chat-page';
+import { OutingChatPage } from './outings/outing-chat/outing-chat-page';
 
 export const routes: Routes = [
   {
@@ -51,4 +56,12 @@ export const routes: Routes = [
   { path: 'settings', component: SettingsPage },
   { path: 'settings/profile-history', component: ProfileHistory },
   { path: 'settings/change-password', component: ChangePassword },
+  { path: 'friends', component: FriendsPage },
+  { path: 'users/:id', component: UserProfilePage }, // this is the view only user profile from friends page
+  { path: 'outings/:id/my-outing-preferences', component: OutingPreferences },
+  { path: 'chat', component: ChatPage }, // open by friendEmail query param
+  {
+    path: 'outings/:id/chat',
+    component: OutingChatPage,
+  }, // outing chat page
 ];

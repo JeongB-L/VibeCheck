@@ -302,7 +302,7 @@ router.get("/profile/history", async (req, res) => {
     .select("*")
     .eq("user_id", user.user_id)
     .order("history_timestamp", { ascending: false })
-    .limit(50);
+    .limit(10);
 
   if (hErr) return res.status(500).json({ error: hErr.message });
 
@@ -364,6 +364,49 @@ router.post("/profile/restore", async (req, res) => {
   if (updErr) return res.status(500).json({ error: updErr.message });
 
   res.json({ ok: true });
+});
+
+// GET /api/profile/public/:id  -> public view by user_id
+router.get("/profile/public/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      return res
+        .status(400)
+        .json({ error: "Valid user_id (UUID) is required" });
+    }
+
+    // basic user + profile
+    const { data: user, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, username, bio, avatar_path, preferences, updated_at)"
+      )
+      .eq("user_id", id)
+      .maybeSingle();
+
+    if (uErr) return res.status(500).json({ error: uErr.message });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const p = (user as any).profiles || {};
+    const prefsArr = Array.isArray(p?.preferences)
+      ? p.preferences.filter((x: any) => typeof x === "string")
+      : [];
+
+    return res.json({
+      user_id: user.user_id,
+      email: user.email,
+      name: [user.first_name, user.last_name].filter(Boolean).join(" "),
+      display_name: p.display_name ?? null,
+      username: p.username ?? null,
+      bio: p.bio ?? null,
+      avatar_url: publicUrlFromPath(p.avatar_path),
+      preferences: prefsArr,
+      updated_at: p.updated_at ?? null,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
 });
 
 export default router;

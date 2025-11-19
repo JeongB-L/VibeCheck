@@ -8,6 +8,8 @@ import profileRouter from "./profile";
 import outingRouter from "./outing";
 import removeAccountRouter from "./removeaccount";
 import updatePassword from "./password-update";
+import friendsRouter from "./friends";
+import preferencesRouter from "./preferences";
 
 const router = Router();
 
@@ -24,5 +26,7 @@ router.use(profileRouter); // GET /api/profile/me, PATCH /api/profile
 router.use(outingRouter);
 router.use(removeAccountRouter); // DELETE /api/account
 router.use(updatePassword); // POST /update_password
+router.use(friendsRouter); // GET/POST/DELETE /api/friends
+router.use(preferencesRouter);
 
 export default router;

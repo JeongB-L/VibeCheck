@@ -1,0 +1,110 @@
+<app-header></app-header>
+
+<div class="detail-wrap">
+  <div class="page-content">
+    <div class="page-head">
+      <div>
+        <h1>Set Your Outing Preferences</h1>
+        <p class="sub">Pick activities, food, and a budget — all on one page.</p>
+      </div>
+      <span class="step">All Preferences</span>
+    </div>
+
+    <!-- Activities -->
+    <section class="section">
+      <h2 class="section-title">Activities</h2>
+      <p class="section-sub">Choose what activities interest you the most!</p>
+
+      <div class="interests-field chip-cloud">
+        <mat-chip-listbox *ngIf="isLoaded" [multiple]="true">
+          <mat-chip-option
+            *ngFor="let interest of pageOptions[0]"
+            [selected]="isSelected(selectedActivities, interest)"
+            (selectionChange)="toggleActivities($event, interest)"
+          >
+            {{ interest }}
+          </mat-chip-option>
+        </mat-chip-listbox>
+
+        <mat-form-field appearance="outline" class="custom-option-field">
+          <mat-label>Add your own activity</mat-label>
+          <input
+            matInput
+            [(ngModel)]="newActivityInput"
+            placeholder="Type your activity..."
+            (keyup.enter)="addCustomActivity()"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            (click)="addCustomActivity()"
+            [disabled]="!newActivityInput.trim()"
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+    </section>
+
+    <!-- Food -->
+    <section class="section">
+      <h2 class="section-title">Food Preferences</h2>
+      <p class="section-sub">Choose what interests you most.</p>
+
+      <div class="interests-field chip-cloud">
+        <mat-chip-listbox *ngIf="isLoaded" [multiple]="true">
+          <mat-chip-option
+            *ngFor="let interest of pageOptions[1]"
+            [selected]="isSelected(selectedFood, interest)"
+            (selectionChange)="toggleFood($event, interest)"
+          >
+            {{ interest }}
+          </mat-chip-option>
+        </mat-chip-listbox>
+
+        <mat-form-field appearance="outline" class="custom-option-field">
+          <mat-label>Add your own cuisine</mat-label>
+          <input
+            matInput
+            [(ngModel)]="newFoodInput"
+            placeholder="Type your cuisine..."
+            (keyup.enter)="addCustomFood()"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            (click)="addCustomFood()"
+            [disabled]="!newFoodInput.trim()"
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+    </section>
+
+    <!-- Budget -->
+    <section class="section">
+      <h2 class="section-title">Budget</h2>
+      <p class="section-sub">We will do our best to align with your budget!</p>
+
+      <div class="interests-field chip-cloud">
+        <mat-chip-listbox *ngIf="isLoaded" [multiple]="true">
+          <mat-chip-option
+            *ngFor="let interest of pageOptions[2]"
+            [selected]="isSelected(selectedBudget, interest)"
+            (selectionChange)="toggleBudget($event, interest)"
+          >
+            {{ interest }}
+          </mat-chip-option>
+        </mat-chip-listbox>
+      </div>
+    </section>
+  </div>
+
+  <div class="navigation-buttons sticky-actions">
+    <button mat-stroked-button color="primary" routerLink="../">Cancel</button>
+    <button mat-flat-button color="primary" (click)="submitInterests()" [disabled]="!isLoaded">
+      Save preferences
+    </button>
+  </div>
+</div>
