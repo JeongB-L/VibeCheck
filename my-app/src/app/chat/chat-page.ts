@@ -1,9 +1,18 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HeaderComponent } from '../header/header';
 import { ToastrService } from 'ngx-toastr';
+
+type Sender = {
+  user_id: string;
+  email?: string;
+  name?: string;
+  display_name?: string | null;
+  avatar_path?: string | null;
+  avatar_url?: string | null;
+};
 
 type Msg = {
   id: number;
@@ -12,16 +21,13 @@ type Msg = {
   body: string;
   created_at: string;
   read_at: string | null;
+  sender?: Sender;
 };
 
 type ThreadRow = {
   thread_id: number;
-  other_user: {
-    user_id: string;
+  other_user: Sender & {
     email: string;
-    name?: string;
-    display_name?: string | null;
-    avatar_path?: string | null;
   };
   last_message_at?: string | null;
   last_message?: any;
@@ -84,7 +90,7 @@ export class ChatPage implements OnInit {
           return;
         }
         this.threadId.set(tid);
-        await this.loadPeerFromThreadsByThreadId(tid); 
+        await this.loadPeerFromThreadsByThreadId(tid);
       } else if (friend) {
         const normalized = friend.trim().toLowerCase();
         this.friendEmail.set(normalized);
@@ -132,12 +138,11 @@ export class ChatPage implements OnInit {
         const ou = row.other_user;
         this.peerDisplayName.set(ou.display_name || ou.name || null);
         this.peerEmail.set(ou.email || this.friendEmail() || null);
-        this.peerAvatarUrl.set(ou.avatar_path || null);
+        this.peerAvatarUrl.set(ou.avatar_url || ou.avatar_path || null);
       } else {
         if (!this.peerEmail()) this.peerEmail.set(this.friendEmail());
       }
-    } catch {
-    }
+    } catch {}
   }
 
   async loadMessages() {
@@ -151,8 +156,9 @@ export class ChatPage implements OnInit {
       if (!res.ok) throw new Error(body?.error || 'Could not load messages');
       this.messages.set(body?.messages || []);
 
-      await this.markReadUpToLast();
+      setTimeout(() => this.scrollToBottomOnce(), 0);
 
+      await this.markReadUpToLast();
     } catch (e: any) {
       this.error.set(e?.message || 'Network error');
     } finally {
@@ -183,11 +189,33 @@ export class ChatPage implements OnInit {
       this.messages.set(arr);
       this.draft.set('');
 
-      await this.markReadUpToLast();
+      setTimeout(() => {
+        if (this.isUserNearBottom()) {
+          this.scrollToBottom();
+        }
+      }, 0);
 
+      await this.markReadUpToLast();
     } catch (e: any) {
       this.toastr.error(e?.message || 'Send failed', 'Chat');
     }
+  }
+
+  private scrollToBottom() {
+    try {
+      const el = this.scroller?.nativeElement;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    } catch {}
+  }
+
+  private isUserNearBottom(): boolean {
+    const el = this.scroller?.nativeElement;
+    if (!el) return true;
+
+    const threshold = 120; // px from bottom
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distanceFromBottom < threshold;
   }
 
   onPeerImgError(ev: Event) {
@@ -203,17 +231,26 @@ export class ChatPage implements OnInit {
     if (!tid || !lastId) return;
 
     try {
-        await fetch(`http://localhost:3001/api/chat/read`, {
+      await fetch(`http://localhost:3001/api/chat/read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            meEmail: this.meEmail,
-            threadId: tid,
-            upToMessageId: lastId,
+          meEmail: this.meEmail,
+          threadId: tid,
+          upToMessageId: lastId,
         }),
-        });
-    } catch {
-    }
-}
+      });
+    } catch {}
+  }
 
+  @ViewChild('scroller') scroller!: ElementRef<HTMLDivElement>;
+
+  private scrollToBottomOnce() {
+    try {
+      const el = this.scroller?.nativeElement;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
+    } catch {}
+  }
 }

@@ -6,7 +6,8 @@ const router = Router();
 
 function normEmail(e?: string) {
   const v = (e || "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new Error("Valid email is required");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    throw new Error("Valid email is required");
   return v;
 }
 async function getUserByEmail(email: string) {
@@ -85,26 +86,47 @@ router.get("/chat/threads", async (req, res) => {
 
     if (!threads?.length) return res.json({ threads: [] });
 
-    const otherIds = threads.map((t) => (t.user_a === me.user_id ? t.user_b : t.user_a));
+    const otherIds = threads.map((t) =>
+      t.user_a === me.user_id ? t.user_b : t.user_a
+    );
 
     // other user info
     const { data: users, error: uErr } = await db
       .from("users")
-      .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
       .in("user_id", otherIds);
     if (uErr) return res.status(500).json({ error: uErr.message });
 
     const userMap = new Map(
-      (users || []).map((u: any) => [
-        u.user_id,
-        {
-          user_id: u.user_id,
-          email: u.email,
-          name: [u.first_name, u.last_name].filter(Boolean).join(" "),
-          display_name: u.profiles?.display_name ?? null,
-          avatar_path: u.profiles?.avatar_path ?? null,
-        },
-      ])
+      (users || []).map((u: any) => {
+        const profiles = u.profiles;
+        const profile =
+          Array.isArray(profiles) && profiles.length > 0
+            ? profiles[0]
+            : profiles || {};
+
+        let avatar_url: string | null = null;
+        if (profile.avatar_path) {
+          const { data } = db.storage
+            .from("avatars")
+            .getPublicUrl(profile.avatar_path);
+          avatar_url = data?.publicUrl ?? null;
+        }
+
+        return [
+          u.user_id,
+          {
+            user_id: u.user_id,
+            email: u.email,
+            name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+            display_name: profile.display_name ?? null,
+            avatar_path: profile.avatar_path ?? null,
+            avatar_url,
+          },
+        ];
+      })
     );
 
     // last message + unread count per thread
@@ -133,7 +155,10 @@ router.get("/chat/threads", async (req, res) => {
 
     const unreadByThread = new Map<number, number>();
     for (const r of unreadRows || []) {
-      unreadByThread.set(r.thread_id, (unreadByThread.get(r.thread_id) || 0) + 1);
+      unreadByThread.set(
+        r.thread_id,
+        (unreadByThread.get(r.thread_id) || 0) + 1
+      );
     }
 
     const payload = threads.map((t) => {
@@ -161,7 +186,8 @@ router.get("/chat/threads", async (req, res) => {
 router.get("/chat/messages", async (req, res) => {
   try {
     const threadId = Number(req.query?.threadId);
-    if (!threadId) return res.status(400).json({ error: "threadId is required" });
+    if (!threadId)
+      return res.status(400).json({ error: "threadId is required" });
 
     const limit = Math.min(Math.max(Number(req.query?.limit) || 50, 1), 200);
     const beforeId = req.query?.beforeId ? Number(req.query.beforeId) : null;
@@ -178,8 +204,62 @@ router.get("/chat/messages", async (req, res) => {
     const { data, error } = await q;
     if (error) return res.status(500).json({ error: error.message });
 
-    // send oldest->newest
-    res.json({ messages: (data || []).reverse() });
+    const rows = data || [];
+    const messages = rows.reverse(); // oldest -> newest
+
+    if (!messages.length) {
+      return res.json({ messages: [] });
+    }
+
+    // Unique sender IDs
+    const senderIds = Array.from(new Set(messages.map((m) => m.sender_id)));
+
+    // Fetch sender info with profile
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", senderIds);
+
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const userMap = new Map(
+      (users || []).map((u: any) => {
+        const profiles = u.profiles;
+        const profile =
+          Array.isArray(profiles) && profiles.length > 0
+            ? profiles[0]
+            : profiles || {};
+
+        let avatar_url: string | null = null;
+        if (profile.avatar_path) {
+          const { data } = db.storage
+            .from("avatars") // 👈 bucket
+            .getPublicUrl(profile.avatar_path);
+          avatar_url = data?.publicUrl ?? null;
+        }
+
+        return [
+          u.user_id,
+          {
+            user_id: u.user_id,
+            email: u.email,
+            name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+            display_name: profile.display_name ?? null,
+            avatar_path: profile.avatar_path ?? null,
+            avatar_url,
+          },
+        ];
+      })
+    );
+
+    const enriched = messages.map((m) => ({
+      ...m,
+      sender: userMap.get(m.sender_id) || { user_id: m.sender_id },
+    }));
+
+    res.json({ messages: enriched });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Server error" });
   }
@@ -193,7 +273,8 @@ router.post("/chat/message", async (req, res) => {
   try {
     const me = await getUserByEmail(req.body?.meEmail);
     const body = String(req.body?.body || "").trim();
-    if (!body) return res.status(400).json({ error: "Message body is required" });
+    if (!body)
+      return res.status(400).json({ error: "Message body is required" });
 
     let threadId = Number(req.body?.threadId) || 0;
 
@@ -216,10 +297,51 @@ router.post("/chat/message", async (req, res) => {
       .update({ last_message_at: inserted.created_at })
       .eq("id", threadId);
 
-    res.status(201).json({ message: inserted });
+    // Fetch sender info (same shape as /chat/messages)
+    const { data: uRaw, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .eq("user_id", me.user_id)
+      .maybeSingle();
+
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const u: any = uRaw;
+    const profiles = u?.profiles;
+    const profile =
+      Array.isArray(profiles) && profiles.length > 0
+        ? profiles[0]
+        : profiles || {};
+
+    let avatar_url: string | null = null;
+    if (profile.avatar_path) {
+      const { data } = db.storage
+        .from("avatars") // 👈 bucket
+        .getPublicUrl(profile.avatar_path);
+      avatar_url = data?.publicUrl ?? null;
+    }
+
+    const sender = u
+      ? {
+          user_id: u.user_id,
+          email: u.email,
+          name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+          display_name: profile.display_name ?? null,
+          avatar_path: profile.avatar_path ?? null,
+          avatar_url,
+        }
+      : { user_id: me.user_id, email: me.email };
+
+    const enriched = { ...inserted, sender };
+
+    res.status(201).json({ message: enriched });
   } catch (e: any) {
     const msg = e?.message || "Server error";
-    const code = /Valid email|User not found|Message body/.test(msg) ? 400 : 500;
+    const code = /Valid email|User not found|Message body/.test(msg)
+      ? 400
+      : 500;
     res.status(code).json({ error: msg });
   }
 });
@@ -234,7 +356,9 @@ router.post("/chat/read", async (req, res) => {
     const threadId = Number(req.body?.threadId);
     const upToId = Number(req.body?.upToMessageId);
     if (!threadId || !upToId) {
-      return res.status(400).json({ error: "threadId and upToMessageId are required" });
+      return res
+        .status(400)
+        .json({ error: "threadId and upToMessageId are required" });
     }
 
     const now = new Date().toISOString();
@@ -256,3 +380,188 @@ router.post("/chat/read", async (req, res) => {
 });
 
 export default router;
+
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------- */
+
+/* Group Chat for outings */
+
+// =========================
+// OUTING GROUP CHAT ROUTES
+// =========================
+
+/* GET /api/chat/outing-messages?outingId=123&limit=50&beforeId=999
+   Returns outing group messages ascending by time, with sender info attached.
+*/
+router.get("/chat/outing-messages", async (req, res) => {
+  try {
+    const outingId = Number(req.query?.outingId);
+    if (!outingId) {
+      return res.status(400).json({ error: "outingId is required" });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 50, 1), 200);
+    const beforeId = req.query?.beforeId ? Number(req.query.beforeId) : null;
+
+    let q = db
+      .from("outing_messages")
+      .select("id, outing_id, sender_id, body, created_at")
+      .eq("outing_id", outingId)
+      .order("id", { ascending: false })
+      .limit(limit);
+
+    if (beforeId) q = q.lt("id", beforeId);
+
+    const { data: rows, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const messages = (rows || []).reverse(); // oldest -> newest
+
+    if (!messages.length) {
+      return res.json({ messages: [] });
+    }
+
+    // Unique sender ids
+    const senderIds = Array.from(new Set(messages.map((m) => m.sender_id)));
+
+    // Fetch basic user info + profile
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", senderIds);
+
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const userMap = new Map(
+      (users || []).map((u: any) => {
+        const profiles = u.profiles;
+        const profile =
+          Array.isArray(profiles) && profiles.length > 0
+            ? profiles[0]
+            : profiles || {};
+
+        let avatar_url: string | null = null;
+        if (profile.avatar_path) {
+          // 🔹 Build public URL from Supabase storage
+          const { data } = db.storage
+            .from("avatars") // <-- change this bucket name if yours is different
+            .getPublicUrl(profile.avatar_path);
+          avatar_url = data?.publicUrl ?? null;
+        }
+
+        return [
+          u.user_id,
+          {
+            user_id: u.user_id,
+            email: u.email,
+            name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+            display_name: profile.display_name ?? null,
+            avatar_path: profile.avatar_path ?? null,
+            avatar_url, // 🔹 NEW: full URL
+          },
+        ];
+      })
+    );
+
+    const enriched = messages.map((m) => ({
+      ...m,
+      sender: userMap.get(m.sender_id) || { user_id: m.sender_id },
+    }));
+
+    res.json({ messages: enriched });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+/* POST /api/chat/outing-message
+   { meEmail, outingId, body }
+   Inserts a group message and returns it with sender info.
+*/
+router.post("/chat/outing-message", async (req, res) => {
+  try {
+    const me = await getUserByEmail(req.body?.meEmail);
+    const outingId = Number(req.body?.outingId);
+    const body = String(req.body?.body || "").trim();
+
+    if (!outingId) {
+      return res.status(400).json({ error: "outingId is required" });
+    }
+    if (!body) {
+      return res.status(400).json({ error: "Message body is required" });
+    }
+
+    const { data: inserted, error } = await db
+      .from("outing_messages")
+      .insert([
+        {
+          outing_id: outingId,
+          sender_id: me.user_id,
+          body,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Fetch sender info (same shape as GET)
+    const { data: uRaw, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .eq("user_id", me.user_id)
+      .maybeSingle();
+
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const u: any = uRaw;
+    const profiles = u?.profiles;
+    const profile =
+      Array.isArray(profiles) && profiles.length > 0
+        ? profiles[0]
+        : profiles || {};
+
+    let avatar_url: string | null = null;
+    if (profile.avatar_path) {
+      const { data } = db.storage
+        .from("avatars") // <-- same bucket name
+        .getPublicUrl(profile.avatar_path);
+      avatar_url = data?.publicUrl ?? null;
+    }
+
+    const sender = u
+      ? {
+          user_id: u.user_id,
+          email: u.email,
+          name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+          display_name: profile.display_name ?? null,
+          avatar_path: profile.avatar_path ?? null,
+          avatar_url,
+        }
+      : { user_id: me.user_id, email: me.email };
+
+    const enriched = { ...inserted, sender };
+
+    res.status(201).json({ message: enriched });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found|Message body/.test(msg)
+      ? 400
+      : 500;
+    res.status(code).json({ error: msg });
+  }
+});
