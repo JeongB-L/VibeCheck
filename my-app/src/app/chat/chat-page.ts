@@ -156,6 +156,8 @@ export class ChatPage implements OnInit {
       if (!res.ok) throw new Error(body?.error || 'Could not load messages');
       this.messages.set(body?.messages || []);
 
+      setTimeout(() => this.scrollToBottomOnce(), 0);
+
       await this.markReadUpToLast();
     } catch (e: any) {
       this.error.set(e?.message || 'Network error');
@@ -187,10 +189,33 @@ export class ChatPage implements OnInit {
       this.messages.set(arr);
       this.draft.set('');
 
+      setTimeout(() => {
+        if (this.isUserNearBottom()) {
+          this.scrollToBottom();
+        }
+      }, 0);
+
       await this.markReadUpToLast();
     } catch (e: any) {
       this.toastr.error(e?.message || 'Send failed', 'Chat');
     }
+  }
+
+  private scrollToBottom() {
+    try {
+      const el = this.scroller?.nativeElement;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    } catch {}
+  }
+
+  private isUserNearBottom(): boolean {
+    const el = this.scroller?.nativeElement;
+    if (!el) return true;
+
+    const threshold = 120; // px from bottom
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distanceFromBottom < threshold;
   }
 
   onPeerImgError(ev: Event) {
@@ -215,6 +240,17 @@ export class ChatPage implements OnInit {
           upToMessageId: lastId,
         }),
       });
+    } catch {}
+  }
+
+  @ViewChild('scroller') scroller!: ElementRef<HTMLDivElement>;
+
+  private scrollToBottomOnce() {
+    try {
+      const el = this.scroller?.nativeElement;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
     } catch {}
   }
 }

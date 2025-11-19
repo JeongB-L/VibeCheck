@@ -18,7 +18,7 @@
   <div *ngIf="error()" class="alert center">{{ error() }}</div>
 
   <!-- Messages -->
-  <section class="chat-scroller" *ngIf="!error()">
+  <section class="chat-scroller" #scroller *ngIf="!error()">
     <ul class="msg-list">
       <li
         class="message-row"
