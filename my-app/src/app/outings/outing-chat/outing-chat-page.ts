@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -41,6 +41,8 @@ export class OutingChatPage implements OnInit {
   outingId = signal<string | null>(null);
   outingTitle = signal<string | null>(null);
 
+  @ViewChild('scroller') scroller!: ElementRef<HTMLDivElement>;
+
   constructor(
     public router: Router,
     private route: ActivatedRoute,
@@ -79,6 +81,23 @@ export class OutingChatPage implements OnInit {
     return m.id;
   }
 
+  private scrollToBottom() {
+    try {
+      const el = this.scroller?.nativeElement;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    } catch {}
+  }
+
+  private isUserNearBottom(): boolean {
+    const el = this.scroller?.nativeElement;
+    if (!el) return true;
+
+    const threshold = 120;
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distanceFromBottom < threshold;
+  }
+
   async loadMessages() {
     const oid = this.outingId();
     if (!oid) return;
@@ -92,6 +111,8 @@ export class OutingChatPage implements OnInit {
       if (!res.ok) throw new Error(body?.error || 'Could not load messages');
 
       this.messages.set(body?.messages || []);
+
+      setTimeout(() => this.scrollToBottom(), 0);
     } catch (e: any) {
       this.error.set(e?.message || 'Network error');
     } finally {
@@ -122,6 +143,11 @@ export class OutingChatPage implements OnInit {
       arr.push(body.message as OutingMsg);
       this.messages.set(arr);
       this.draft.set('');
+      setTimeout(() => {
+        if (this.isUserNearBottom()) {
+          this.scrollToBottom();
+        }
+      }, 0);
     } catch (e: any) {
       this.toastr.error(e?.message || 'Send failed', 'Outing Chat');
     }
