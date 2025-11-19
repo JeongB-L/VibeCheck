@@ -16,6 +16,7 @@ import { FriendsPage } from './friends/friends';
 import { UserProfilePage } from './user-profile/user-profile';
 import { OutingPreferences } from './outings/outing-preferences/outing-preferences';
 import { ChatPage } from './chat/chat-page';
+import { OutingChatPage } from './outings/outing-chat/outing-chat-page';
 
 export const routes: Routes = [
   {
@@ -59,5 +60,8 @@ export const routes: Routes = [
   { path: 'users/:id', component: UserProfilePage }, // this is the view only user profile from friends page
   { path: 'outings/:id/my-outing-preferences', component: OutingPreferences },
   { path: 'chat', component: ChatPage }, // open by friendEmail query param
-
+  {
+    path: 'outings/:id/chat',
+    component: OutingChatPage,
+  }, // outing chat page
 ];
