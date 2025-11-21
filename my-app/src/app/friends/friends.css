@@ -301,3 +301,91 @@ h1 {
 .tab.active:hover {
   background: #0b6ea6;
 }
+
+/* ---------- Suggested Friends Grid ---------- */
+
+.suggested-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.user-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 10px 12px;
+  background: #f9fafb;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    'avatar body'
+    'avatar actions';
+  column-gap: 10px;
+  row-gap: 6px;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.06s ease,
+    border-color 0.18s ease;
+}
+
+.user-card:hover {
+  background: #f6fbff;
+  box-shadow: 0 2px 10px rgba(14, 135, 197, 0.12);
+  transform: translateY(-1px);
+  border-color: #cfeafa;
+}
+
+.user-card-avatar {
+  grid-area: avatar;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e5e7eb;
+  display: grid;
+  place-items: center;
+}
+
+.user-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-card-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.user-card-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.badges {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.badge.primary {
+  background: #0e87c5;
+  color: #fff;
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
