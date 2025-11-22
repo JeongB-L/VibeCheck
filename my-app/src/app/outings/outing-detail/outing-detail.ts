@@ -8,6 +8,7 @@ import {
   inject,
   signal,
   PLATFORM_ID,
+  computed,
 } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HeaderComponent } from '../../header/header';
@@ -48,6 +49,7 @@ type GeneratedPlan = {
     totalDistanceKm?: number;
     avgFairnessIndex?: number;
     satisfaction?: Record<string, number>;
+    text?: string;
   };
   tips?: string;
 };
@@ -110,6 +112,10 @@ export class OutingDetail implements OnInit, AfterViewInit {
   activePlanIdx = signal<number>(0);
   resolving = signal<boolean>(false);
 
+  activePlan = computed(() => this.plans()?.[this.activePlanIdx()] ?? null);
+
+  generatingSummary = signal<boolean>(false);
+
   // --- Members ---
   members: any[] = [];
   owner: any = null;
@@ -143,6 +149,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
   // ---------- map (plain JS API) ----------
   @ViewChild('mapEl', { static: false }) mapEl!: ElementRef<HTMLDivElement>;
+  @ViewChild('summaryText') summaryText!: ElementRef;
   private gmap?: any;
   private gmarkers: any[] = [];
   private markerById = new Map<string, any>();
@@ -193,6 +200,11 @@ export class OutingDetail implements OnInit, AfterViewInit {
     this.ensureMap();
   }
 
+  setLeftView(view: 'recs' | 'plans') {
+    this.leftView.set(view);
+    this.cdr.detectChanges();
+  }
+
   //GEN
   private normalizeClient(payload: any): PlansPayload {
     // Defensive client-side guard in case backend isn't updated.
@@ -228,8 +240,10 @@ export class OutingDetail implements OnInit, AfterViewInit {
       const body = await r.json();
       const norm = this.normalizeClient(body);
       this.plans.set(norm.plans);
+      this.cdr.detectChanges();
       if (norm.plans.length) {
         this.activePlanIdx.set(0);
+        this.cdr.detectChanges();
         await this.resolveAndPlot(norm.plans[0]);
       }
     } catch (e) {
@@ -301,6 +315,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
       }
 
       this.planPins.set(resolved);
+      this.cdr.detectChanges();
       await this.waitForMaps();
       this.ensureMap();
       this.renderMarkers(); // ⬅️ now draws both recs + plan pins
@@ -314,11 +329,13 @@ export class OutingDetail implements OnInit, AfterViewInit {
     }
   }
 
-  setActivePlan(i: number) {
+  async setActivePlan(i: number) {
     const all = this.plans();
     if (!all || !all[i]) return;
     this.activePlanIdx.set(i);
-    this.resolveAndPlot(all[i]);
+    this.cdr.detectChanges();
+    await this.resolveAndPlot(all[i]);
+    this.cdr.detectChanges();
   }
 
   openStopInMaps(s: PlanStop) {
@@ -725,5 +742,75 @@ export class OutingDetail implements OnInit, AfterViewInit {
     this.router.navigate(['/outings', o.id, 'chat'], {
       queryParams: { title: o.title },
     });
+  }
+
+  async generateAISummary() {
+    const plan = this.activePlan();
+    if (!plan) return;
+
+    this.generatingSummary.set(true);
+
+    // Clear old summary to start fresh typing
+    const all = this.plans()!;
+    const planIndex = this.activePlanIdx();
+    all[planIndex] = {
+      ...all[planIndex],
+      summary: { ...all[planIndex].summary, text: '' },
+    };
+    this.plans.set([...all]);
+
+    try {
+      const outingId = this.outing()?.id;
+
+      const res = await fetch(`${API}/api/outings/${outingId}/ai-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planIndex }),
+      });
+
+      if (!res.ok || !res.body) throw new Error('Failed');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullText += decoder.decode(value, { stream: true });
+      }
+
+      // Now type slowly char by char
+      let i = 0;
+      const typeSpeed = 20; // ms per character; higher the slower
+      const typeWriter = () => {
+        if (i < fullText.length) {
+          const currentText = fullText.slice(0, i + 1) + '▋';
+          all[planIndex] = {
+            ...all[planIndex],
+            summary: { ...all[planIndex].summary, text: currentText },
+          };
+          this.plans.set([...all]);
+          this.cdr.detectChanges();
+          i++;
+          setTimeout(typeWriter, typeSpeed);
+        } else {
+          all[planIndex] = {
+            ...all[planIndex],
+            summary: { ...all[planIndex].summary, text: fullText },
+          };
+          this.plans.set([...all]);
+          this.cdr.detectChanges();
+        }
+      };
+
+      typeWriter();
+
+      this.toast.success('AI summary generated!');
+    } catch (err: any) {
+      this.toast.error(err?.message || 'Failed to generate AI summary');
+    } finally {
+      this.generatingSummary.set(false);
+    }
   }
 }
