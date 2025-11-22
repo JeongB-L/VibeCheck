@@ -132,10 +132,10 @@
     <section class="left">
       <!-- Left column view switch -->
       <nav class="left-switch">
-        <button [class.active]="leftView() === 'recs'" (click)="leftView.set('recs')">
+        <button [class.active]="leftView() === 'recs'" (click)="setLeftView('recs')">
           Recommendations
         </button>
-        <button [class.active]="leftView() === 'plans'" (click)="leftView.set('plans')">
+        <button [class.active]="leftView() === 'plans'" (click)="setLeftView('plans')">
           Outing Plans
         </button>
       </nav>
@@ -196,7 +196,7 @@
 
           <ng-container *ngIf="P.length; else noPlansYet">
             <!-- bind active plan once -->
-            <ng-container *ngIf="P[activePlanIdx()] as A">
+            <ng-container *ngIf="activePlan() as A">
               <div class="badges">
                 <span *ngFor="let b of A.badge || []" class="badge">{{ b }}</span>
                 <span *ngIf="A.total_budget_estimate" class="budget">
@@ -233,7 +233,13 @@
                     </button>
                   </div>
 
-                  <p *ngIf="$any(A.summary)?.text; else noSummary">{{ $any(A.summary).text }}</p>
+                  <p
+                    class="streaming-text"
+                    #summaryText
+                    *ngIf="$any(A.summary)?.text !== undefined; else noSummary"
+                  >
+                    {{ $any(A.summary)?.text }}
+                  </p>
                   <ng-template #noSummary>
                     <p class="placeholder">No AI summary yet – click the button to generate one.</p>
                   </ng-template>

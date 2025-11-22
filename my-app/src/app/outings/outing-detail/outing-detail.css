@@ -968,3 +968,31 @@
   color: #94a3b8;
   font-style: italic;
 }
+.streaming-text {
+  min-height: 4em; /* Space for multi-line */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  animation: typing 0.5s steps(40, end); /* Subtle type effect */
+}
+
+.streaming-text::after {
+  content: '▋';
+  animation: blink 1s step-end infinite;
+  opacity: 1;
+  color: #1e88e5; /* Blue cursor */
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}

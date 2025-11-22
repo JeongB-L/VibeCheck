@@ -32,6 +32,7 @@ type GeneratedPlan = {
     totalDistanceKm?: number;
     avgFairnessIndex?: number; // 0-1 variant; normalize below
     satisfaction?: Record<string, number>;
+    text?: string;
   };
   tips?: string;
 };
@@ -83,11 +84,13 @@ function normalizePlans(raw: any): PlansPayload {
         avgFairnessIndex:
           typeof s.avgFairnessIndex === "number"
             ? s.avgFairnessIndex
-            : undefined, // 0..1 version
+            : undefined,
         satisfaction:
           s.satisfaction && typeof s.satisfaction === "object"
             ? s.satisfaction
             : undefined,
+        // 👇 ADD THIS LINE 👇
+        text: typeof s.text === "string" ? s.text : undefined,
       };
     }
 
@@ -1141,7 +1144,7 @@ router.post("/outings/:id/ai-summary", async (req, res) => {
     const selectedPlan = plansArray[planIndex];
     if (!selectedPlan) return res.status(400).json({ error: "Plan not found" });
 
-    // 2. Build a concise prompt
+    // 2. Build a concise prompt (your original, unchanged)
     const prompt = `You are an expert travel writer. Write a short, engaging AI summary (2-4 sentences) for the following group outing plan. 
   Highlight the overall vibe, overall walkthrough of the tour, key highlights, and why it’s a great fit Fragile fairness score. 
   Do not use emdash. Do not make something up that is not in the plan: ${
@@ -1166,9 +1169,14 @@ router.post("/outings/:id/ai-summary", async (req, res) => {
   
   Write a friendly, exciting summary that can be shown directly to the group. Keep it under 120 words.`;
 
-    // 3. Call OpenAI
-    console.log(" - Sending prompt to OpenAI API");
-    const completion = await openai.chat.completions.create({
+    // 3. Stream response (official OpenAI Node.js streaming)
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders(); // Start streaming immediately
+
+    console.log(" - Starting OpenAI stream");
+    const stream = await openai.chat.completions.create({
       model: "gpt-5-mini",
       messages: [
         {
@@ -1177,16 +1185,25 @@ router.post("/outings/:id/ai-summary", async (req, res) => {
         },
         { role: "user", content: prompt },
       ],
+      stream: true,
     });
 
-    console.log(" - OpenAI response received for summary");
-    const summary = completion.choices[0]?.message?.content?.trim();
-    if (!summary) throw new Error("Empty response from OpenAI");
-
-    res.json({ summary });
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      if (content) {
+        res.write(content);
+      }
+    }
+    res.end();
+    return; // Prevent any further response
   } catch (e: any) {
-    console.error("AI summary error:", e);
-    res.status(500).json({ error: e?.message || "Failed to generate summary" });
+    console.error("AI summary streaming error:", e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate summary" });
+    } else {
+      res.write("\n\nError: Failed to complete summary.");
+      res.end();
+    }
   }
 });
 
