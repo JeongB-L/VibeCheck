@@ -48,6 +48,7 @@ type GeneratedPlan = {
     totalDistanceKm?: number;
     avgFairnessIndex?: number;
     satisfaction?: Record<string, number>;
+    text?: string;
   };
   tips?: string;
 };
@@ -109,6 +110,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
   plans = signal<GeneratedPlan[] | null>([]);
   activePlanIdx = signal<number>(0);
   resolving = signal<boolean>(false);
+
+  generatingSummary = signal<boolean>(false);
 
   // --- Members ---
   members: any[] = [];
@@ -725,5 +728,41 @@ export class OutingDetail implements OnInit, AfterViewInit {
     this.router.navigate(['/outings', o.id, 'chat'], {
       queryParams: { title: o.title },
     });
+  }
+
+  async generateAISummary() {
+    const plan = this.plans()?.[this.activePlanIdx()];
+    if (!plan) return;
+
+    this.generatingSummary.set(true);
+
+    try {
+      const outingId = this.outing()?.id;
+      // Current index selected out of the 3 generated plans.
+      const planIndex = this.activePlanIdx();
+
+      const res = await fetch(`${API}/api/outings/${outingId}/ai-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planIndex }),
+      });
+
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || 'Failed');
+
+      // Mutate the current plan in-place
+      const all = this.plans()!;
+      all[planIndex] = {
+        ...all[planIndex],
+        summary: { ...all[planIndex].summary, text: body.summary },
+      };
+      this.plans.set([...all]); // trigger change detection
+      this.toast.success('AI summary generated!');
+      console.log('AI summary generated:', body.summary);
+    } catch (err: any) {
+      this.toast.error(err?.message || 'Failed to generate AI summary');
+    } finally {
+      this.generatingSummary.set(false);
+    }
   }
 }

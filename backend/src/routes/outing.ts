@@ -53,12 +53,18 @@ function normalizePlans(raw: any): PlansPayload {
       planId: typeof rp.planId === "string" ? rp.planId : undefined,
       title: typeof rp.title === "string" ? rp.title : undefined,
       name: typeof rp.name === "string" ? rp.name : undefined,
-      badge: Array.isArray(rp.badge) ? rp.badge.filter((x: any) => typeof x === "string") : [],
+      badge: Array.isArray(rp.badge)
+        ? rp.badge.filter((x: any) => typeof x === "string")
+        : [],
       overview: typeof rp.overview === "string" ? rp.overview : "",
       total_budget_estimate:
-        typeof rp.total_budget_estimate === "string" ? rp.total_budget_estimate : undefined,
+        typeof rp.total_budget_estimate === "string"
+          ? rp.total_budget_estimate
+          : undefined,
       fairness_scores:
-        rp.fairness_scores && typeof rp.fairness_scores === "object" ? rp.fairness_scores : {},
+        rp.fairness_scores && typeof rp.fairness_scores === "object"
+          ? rp.fairness_scores
+          : {},
       avgFairnessIndex:
         typeof rp.avgFairnessIndex === "number" ? rp.avgFairnessIndex : null,
       tips: typeof rp.tips === "string" ? rp.tips : "",
@@ -70,12 +76,18 @@ function normalizePlans(raw: any): PlansPayload {
     if (rp.summary && typeof rp.summary === "object") {
       const s = rp.summary;
       plan.summary = {
-        durationHours: typeof s.durationHours === "number" ? s.durationHours : undefined,
-        totalDistanceKm: typeof s.totalDistanceKm === "number" ? s.totalDistanceKm : undefined,
+        durationHours:
+          typeof s.durationHours === "number" ? s.durationHours : undefined,
+        totalDistanceKm:
+          typeof s.totalDistanceKm === "number" ? s.totalDistanceKm : undefined,
         avgFairnessIndex:
-          typeof s.avgFairnessIndex === "number" ? s.avgFairnessIndex : undefined, // 0..1 version
+          typeof s.avgFairnessIndex === "number"
+            ? s.avgFairnessIndex
+            : undefined, // 0..1 version
         satisfaction:
-          s.satisfaction && typeof s.satisfaction === "object" ? s.satisfaction : undefined,
+          s.satisfaction && typeof s.satisfaction === "object"
+            ? s.satisfaction
+            : undefined,
       };
     }
 
@@ -98,12 +110,15 @@ function normalizePlans(raw: any): PlansPayload {
             ? st.matches.filter((x: any) => typeof x === "string")
             : [],
           priceRange:
-            typeof st.priceRange === "string" ? st.priceRange :
-            typeof st.cost_estimate === "string" && /\$+|free/i.test(st.cost_estimate)
-              ? (st.cost_estimate.match(/\$+/)?.[0] ?? "Free")
+            typeof st.priceRange === "string"
+              ? st.priceRange
+              : typeof st.cost_estimate === "string" &&
+                /\$+|free/i.test(st.cost_estimate)
+              ? st.cost_estimate.match(/\$+/)?.[0] ?? "Free"
               : null,
           description: typeof st.description === "string" ? st.description : "",
-          cost_estimate: typeof st.cost_estimate === "string" ? st.cost_estimate : undefined,
+          cost_estimate:
+            typeof st.cost_estimate === "string" ? st.cost_estimate : undefined,
           notes: typeof st.notes === "string" ? st.notes : undefined,
         };
 
@@ -128,8 +143,6 @@ function normalizePlans(raw: any): PlansPayload {
   out.plans = plans;
   return out;
 }
-
-
 
 const router = Router();
 
@@ -797,7 +810,9 @@ async function getOutingMembers(outingId: number) {
   // 3️⃣ Fetch user data
   const { data: users, error: uErr } = await db
     .from("users")
-    .select("user_id, email, first_name, last_name, profiles(display_name, avatar_path)")
+    .select(
+      "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+    )
     .in("user_id", allIds);
   if (uErr) throw new Error(uErr.message);
 
@@ -808,7 +823,9 @@ async function getOutingMembers(outingId: number) {
     ? {
         user_id: ownerUser.user_id,
         email: ownerUser.email,
-        name: [ownerUser.first_name, ownerUser.last_name].filter(Boolean).join(" "),
+        name: [ownerUser.first_name, ownerUser.last_name]
+          .filter(Boolean)
+          .join(" "),
         display_name: ownerUser.profiles?.display_name ?? null,
         avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
         role: "owner",
@@ -837,12 +854,7 @@ async function getOutingMembers(outingId: number) {
   return { owner, members };
 }
 
-
-
 router.post("/generate-outing", async (req, res) => {
-
-
-
   console.log("=== POST /api/generate-outing START ===");
   // 1. Get all user preferences from the database based on current outing
 
@@ -872,12 +884,15 @@ router.post("/generate-outing", async (req, res) => {
     // 2.1.1 Get all member user_ids for the outing
     console.log(" - Fetching outing members for outingId:", outingId);
     const { owner, members } = await getOutingMembers(outingId);
-  participantNames = [owner, ...(members ?? [])]
-    .filter(Boolean)
-    .map((p: any) =>
-      p.display_name || p.name || (p.email ? p.email.split("@")[0] : "Unknown")
-    );
-    console.log(participantNames) 
+    participantNames = [owner, ...(members ?? [])]
+      .filter(Boolean)
+      .map(
+        (p: any) =>
+          p.display_name ||
+          p.name ||
+          (p.email ? p.email.split("@")[0] : "Unknown")
+      );
+    console.log(participantNames);
 
     const { data: memberRows, error: mErr } = await db
       .from("outing_members")
@@ -889,7 +904,6 @@ router.post("/generate-outing", async (req, res) => {
     // include the creator as participant as well
     const memberIds = (memberRows || []).map((r: any) => r.user_id);
     const userIds = Array.from(new Set([...memberIds, outing.creator_id]));
-
 
     // 2.1.2 Fetch preferences for those user_ids for this outing
     if (!userIds.length) {
@@ -1096,6 +1110,86 @@ router.post("/generate-outing", async (req, res) => {
   }
 });
 
+// POST /api/outings/:id/ai-summary
+// generate short AI summary for the selected plan
+router.post("/outings/:id/ai-summary", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) return res.status(400).json({ error: "Invalid outing id" });
+
+    const { planIndex = 0 } = req.body;
+
+    // 1. Load saved plans
+    const { data, error } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "No saved plans" });
+
+    let rawPlans: any;
+    try {
+      rawPlans =
+        typeof data.plans === "string" ? JSON.parse(data.plans) : data.plans;
+    } catch {
+      return res.status(500).json({ error: "Corrupted plan data" });
+    }
+
+    const plansArray = Array.isArray(rawPlans.plans) ? rawPlans.plans : [];
+    const selectedPlan = plansArray[planIndex];
+    if (!selectedPlan) return res.status(400).json({ error: "Plan not found" });
+
+    // 2. Build a concise prompt
+    const prompt = `You are an expert travel writer. Write a short, engaging AI summary (2-4 sentences) for the following group outing plan. 
+  Highlight the overall vibe, overall walkthrough of the tour, key highlights, and why it’s a great fit Fragile fairness score. 
+  Do not use emdash. Do not make something up that is not in the plan: ${
+    selectedPlan.avgFairnessIndex ?? "N/A"
+  }%.
+  
+  Plan title: ${selectedPlan.title || selectedPlan.name || "Untitled Plan"}
+  Badges: ${(selectedPlan.badge || []).join(", ")}
+  Overview (if any): ${selectedPlan.overview || "—"}
+  
+  Full itinerary (condensed):
+  ${selectedPlan.itinerary
+    .map(
+      (day: any) =>
+        `${day.date}: ${day.timeline
+          .map((s: any) => `${s.time || ""} ${s.name || ""}`)
+          .join(" → ")}`
+    )
+    .join("\n")}
+  
+  Tips: ${selectedPlan.tips || "—"}
+  
+  Write a friendly, exciting summary that can be shown directly to the group. Keep it under 120 words.`;
+
+    // 3. Call OpenAI
+    console.log(" - Sending prompt to OpenAI API");
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a concise, enthusiastic travel summarizer.",
+        },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    console.log(" - OpenAI response received for summary");
+    const summary = completion.choices[0]?.message?.content?.trim();
+    if (!summary) throw new Error("Empty response from OpenAI");
+
+    res.json({ summary });
+  } catch (e: any) {
+    console.error("AI summary error:", e);
+    res.status(500).json({ error: e?.message || "Failed to generate summary" });
+  }
+});
+
 // GET /api/outings/:id/plan  -> normalized payload
 router.get("/outings/:id/plan", async (req, res) => {
   try {
@@ -1109,11 +1203,16 @@ router.get("/outings/:id/plan", async (req, res) => {
       .maybeSingle();
 
     if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: "No saved plan for this outing" });
+    if (!data)
+      return res.status(404).json({ error: "No saved plan for this outing" });
 
     let raw = data.plans;
     if (typeof raw === "string") {
-      try { raw = JSON.parse(raw); } catch { raw = {}; }
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        raw = {};
+      }
     }
 
     const normalized = normalizePlans(raw);
@@ -1127,6 +1226,5 @@ router.get("/outings/:id/plan", async (req, res) => {
     return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
-
 
 export default router;

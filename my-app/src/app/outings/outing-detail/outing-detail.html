@@ -213,6 +213,32 @@
                   <span class="avg-num">{{ A.avgFairnessIndex ?? 0 | number : '1.0-0' }}%</span>
                 </div>
 
+                <!-- AI Summary Panel -->
+                <div class="ai-summary">
+                  <div class="ai-summary-header">
+                    <h4>AI Summary</h4>
+                    <button
+                      class="btn btn-outline btn-small"
+                      (click)="generateAISummary()"
+                      [disabled]="generatingSummary()"
+                      title="Generate a fresh AI summary for this plan"
+                    >
+                      <span class="icon">✨</span>
+                      <span *ngIf="!generatingSummary(); else summarizing"
+                        >Generate AI Summary</span
+                      >
+                      <ng-template #summarizing>
+                        <span>Generating…</span>
+                      </ng-template>
+                    </button>
+                  </div>
+
+                  <p *ngIf="$any(A.summary)?.text; else noSummary">{{ $any(A.summary).text }}</p>
+                  <ng-template #noSummary>
+                    <p class="placeholder">No AI summary yet – click the button to generate one.</p>
+                  </ng-template>
+                </div>
+
                 <div class="scores" *ngIf="A.fairness_scores">
                   <div class="score-row" *ngFor="let kv of A.fairness_scores | keyvalue">
                     <span class="who">{{ kv.key }}</span>

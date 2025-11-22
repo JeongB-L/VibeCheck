@@ -950,3 +950,21 @@
   outline: 2px solid #20b5f4;
   outline-offset: 2px;
 }
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ai-summary-header h4 {
+  margin: 0;
+}
+.btn-small {
+  font-size: 13px;
+  padding: 6px 10px;
+}
+.placeholder {
+  color: #94a3b8;
+  font-style: italic;
+}
