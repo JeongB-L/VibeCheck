@@ -1244,4 +1244,193 @@ router.get("/outings/:id/plan", async (req, res) => {
   }
 });
 
+router.post("/outings/:id/plan-vote", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const { email, userId: rawUserId, planIndex } = req.body || {};
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    if (typeof planIndex !== "number" || !Number.isInteger(planIndex)) {
+      return res.status(400).json({ error: "planIndex must be an integer" });
+    }
+
+    // assuming 3 plans (0,1,2)
+    if (planIndex < 0 || planIndex > 2) {
+      return res.status(400).json({ error: "planIndex must be 0, 1, or 2" });
+    }
+
+    let userId: string | null = null;
+
+    if (rawUserId && typeof rawUserId === "string" && rawUserId.trim()) {
+      userId = rawUserId.trim();
+    } else if (email && typeof email === "string" && email.trim()) {
+      const me = await getUserByEmail(email); 
+      userId = me.user_id;
+    }
+
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ error: "userId or email is required" });
+    }
+
+    // outing exists?
+    const outing = await getOuting(outingId); 
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member to vote
+    if (outing.creator_id !== userId) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (mErr) {
+        return res.status(500).json({ error: mErr.message });
+      }
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    // upsert vote: last vote wins
+    const { data, error } = await db
+      .from("outing_plan_votes")
+      .upsert(
+        {
+          outing_id: outingId,
+          user_id: userId,
+          plan_index: planIndex,
+        },
+        { onConflict: "outing_id,user_id" }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, vote: data });
+  } catch (e: any) {
+    console.error("Error saving plan vote:", e);
+    return res
+      .status(500)
+      .json({ error: e?.message || "Internal server error" });
+  }
+});
+
+// GET /api/outings/:id/plan-votes?email=me@example.com
+router.get("/outings/:id/plan-votes", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.query.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    // caller
+    const me = await getUserByEmail(email);
+
+    // outing exists?
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member
+    if (outing.creator_id !== me.user_id) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", me.user_id)
+        .maybeSingle();
+
+      if (mErr) {
+        return res.status(500).json({ error: mErr.message });
+      }
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    // raw votes
+    const { data: votes, error: vErr } = await db
+      .from("outing_plan_votes")
+      .select("user_id, plan_index")
+      .eq("outing_id", outingId);
+
+    if (vErr) {
+      return res.status(500).json({ error: vErr.message });
+    }
+
+    if (!votes || !votes.length) {
+      return res.json({ planVotes: [] });
+    }
+
+    const userIds = [...new Set(votes.map((v) => v.user_id))];
+
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", userIds);
+
+    if (uErr) {
+      return res.status(500).json({ error: uErr.message });
+    }
+
+    const byId = new Map(
+      (users || []).map((u: any) => [u.user_id, u])
+    );
+
+    const grouped: Record<number, any[]> = {};
+    for (const v of votes) {
+      const u: any = byId.get(v.user_id) || {};
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+      if (!grouped[v.plan_index]) grouped[v.plan_index] = [];
+      grouped[v.plan_index].push({
+        user_id: v.user_id,
+        email: u.email,
+        name,
+        display_name: u.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+        isMe: v.user_id === me.user_id,
+      });
+    }
+
+    const planVotes = Object.entries(grouped)
+      .map(([idx, voters]) => ({
+        planIndex: Number(idx),
+        voters,
+      }))
+      .sort((a, b) => a.planIndex - b.planIndex);
+
+    return res.json({ planVotes });
+  } catch (e: any) {
+    console.error("GET /outings/:id/plan-votes error", e);
+    return res
+      .status(500)
+      .json({ error: e?.message || "Server error" });
+  }
+});
+
+
 export default router;

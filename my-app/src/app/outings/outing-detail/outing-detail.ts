@@ -88,6 +88,17 @@ type TabKey = 'food' | 'stay' | 'do';
 type Prefs = { activities: string[]; food: string[]; budget: string[] };
 type PrefEntry = { email: string; user_id: string | null; prefs: Prefs | null };
 
+// type for vote data from backend
+type PlanVoter = {
+  user_id: string;
+  email: string;
+  name: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  isMe: boolean;
+};
+
+
 @Component({
   standalone: true,
   selector: 'app-outing-detail',
@@ -95,6 +106,7 @@ type PrefEntry = { email: string; user_id: string | null; prefs: Prefs | null };
   templateUrl: './outing-detail.html',
   styleUrls: ['./outing-detail.css'],
 })
+
 export class OutingDetail implements OnInit, AfterViewInit {
   constructor(private toast: ToastrService, router: Router, private cdr: ChangeDetectorRef) {}
 
@@ -146,6 +158,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
   items = signal<RecItem[]>([]);
   selectedId = signal<string | null>(null);
+  planVotes: { planIndex: number; voters: PlanVoter[] }[] = [];
+  loadingVotes = false;
 
   // ---------- map (plain JS API) ----------
   @ViewChild('mapEl', { static: false }) mapEl!: ElementRef<HTMLDivElement>;
@@ -192,6 +206,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
     if (this.isBrowser) this.showMap.set(true);
 
     this.fetchGeneratedPlan(id); //GEN
+    this.loadPlanVotes();
+
   }
 
   async ngAfterViewInit() {
@@ -726,6 +742,7 @@ export class OutingDetail implements OnInit, AfterViewInit {
       this.toast.success('Outing generated successfully!');
 
       await this.fetchGeneratedPlan(o.id); //refersh
+      this.loadPlanVotes();
     } catch (err: any) {
       this.toast.error(err?.message || 'Error generating outing');
       this.cdr.detectChanges();
@@ -812,5 +829,108 @@ export class OutingDetail implements OnInit, AfterViewInit {
     } finally {
       this.generatingSummary.set(false);
     }
+  }
+
+  voting = false;
+  voteMessage = '';
+
+  async voteForActivePlan() {
+  const outing = this.outing();
+  const email = this.userEmail; 
+
+  if (!outing) {
+    console.warn('No outing() value, cannot vote');
+    return;
+  }
+
+  if (!email) {
+    console.warn('No userEmail in sessionStorage');
+    this.voteMessage = 'You must be logged in to vote.';
+    return;
+  }
+
+  const planIndex = this.activePlanIdx();
+  console.log('Voting on planIndex', planIndex, 'for outing', outing.id, 'as', email);
+
+  this.voting = true;
+  this.voteMessage = '';
+
+  try {
+    const res = await fetch(`${API}/api/outings/${outing.id}/plan-vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,     
+        planIndex,
+      }),
+    });
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || `HTTP ${res.status}`);
+    }
+
+    this.voteMessage = 'Your vote has been saved.';
+    this.loadPlanVotes();
+
+  } catch (e: any) {
+    console.error('Vote error', e);
+    this.voteMessage =
+      e?.message || 'Could not save your vote. Please try again.';
+  } finally {
+    this.voting = false;
+  }
+}
+
+ async loadPlanVotes() {
+    const o = this.outing();
+    const email = this.userEmail;
+
+    if (!o || !email) return;
+
+    this.loadingVotes = true;
+    try {
+      const res = await fetch(
+        `${API}/api/outings/${o.id}/plan-votes?email=${encodeURIComponent(email)}`
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+
+      this.planVotes = body.planVotes || [];
+      this.cdr.detectChanges();
+    } catch (err) {
+      console.error('Failed to load plan votes', err);
+    } finally {
+      this.loadingVotes = false;
+    }
+  }
+
+  voteCountFor(planIndex: number): number {
+    return (
+      this.planVotes.find((p) => p.planIndex === planIndex)?.voters.length || 0
+    );
+  }
+
+  currentPlanVotes(): { planIndex: number; voters: PlanVoter[] } | null {
+    const idx = this.activePlanIdx();
+    return this.planVotes.find((p) => p.planIndex === idx) || null;
+  }
+
+  planVoterNamesTooltip(planIndex: number): string {
+    const pv = this.planVotes.find((p) => p.planIndex === planIndex);
+    if (!pv || !pv.voters.length) {
+      return 'No votes yet';
+    }
+
+    return pv.voters
+      .map((v) => {
+        if (v.isMe) return 'You';
+        return v.display_name || v.name || v.email || 'Unknown';
+      })
+      .join(', ');
   }
 }

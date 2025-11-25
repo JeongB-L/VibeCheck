@@ -190,10 +190,34 @@
                 (click)="setActivePlan(i)"
               >
                 {{ pl.title || 'Plan ' + (i + 1) }}
+
+              <!-- vote count badge -->
+              <span
+                class="badge"
+                *ngIf="voteCountFor(i) as c"
+                [attr.title]="planVoterNamesTooltip(i)"
+              >
+                {{ c }} vote{{ c > 1 ? 's' : '' }}
+              </span>
+              </button>
+
+              <!-- vote button -->
+              <button
+                class="plan-refresh plan-vote-btn"
+                type="button"
+                (click)="voteForActivePlan()"
+                [disabled]="voting || resolving() || generating()"
+              >
+                <span>
+                  {{ voting ? 'Saving vote…' : 'Vote for this plan' }}
+                </span>
               </button>
             </div>
           </div>
-
+           <!-- small status line under header -->
+          <p *ngIf="voteMessage" class="small">
+            {{ voteMessage }}
+          </p>
           <ng-container *ngIf="P.length; else noPlansYet">
             <!-- bind active plan once -->
             <ng-container *ngIf="activePlan() as A">
@@ -205,7 +229,44 @@
               </div>
 
               <p class="overview" *ngIf="A.overview">{{ A.overview }}</p>
+              <!-- start of votes panel -->
+              <div class="votes" *ngIf="currentPlanVotes() as PV">
+                <div class="votes-header">
+                  <span class="votes-title">Votes</span>
+                  <span class="votes-count">
+                    {{ PV.voters.length || 0 }} vote{{ PV.voters.length === 1 ? '' : 's' }}
+                  </span>
+                </div>
 
+                <div class="votes-body" *ngIf="PV.voters.length; else noVotes">
+                  <div class="votes-avatars">
+                    <img
+                      *ngFor="let v of PV.voters"
+                      class="votes-ava"
+                      [src]="v.avatar_url || 'assets/default_pfp.jpg'"
+                      [alt]="v.display_name || v.name || v.email"
+                    />
+                  </div>
+
+                  <div class="votes-names">
+                    <span
+                      class="votes-name"
+                      *ngFor="let v of PV.voters; let i = index"
+                    >
+                      <strong *ngIf="v.isMe">You</strong>
+                      <span *ngIf="!v.isMe">
+                        {{ v.display_name || v.name || v.email }}
+                      </span>
+                      <span *ngIf="i < PV.voters.length - 1"> · </span>
+                    </span>
+                  </div>
+                </div>
+
+                <ng-template #noVotes>
+                  <div class="votes-empty">No votes yet for this plan.</div>
+                </ng-template>
+              </div>
+              <!-- end votes panel -->
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
                 <div class="avg">
