@@ -856,9 +856,9 @@ async function getOutingMembers(outingId: number) {
 
   return { owner, members };
 }
-
+const VOTE_WINDOW_SECONDS = 3600; // 1 hour
 router.post("/generate-outing", async (req, res) => {
-  
+
   console.log("=== POST /api/generate-outing START ===");
   // 1. Get all user preferences from the database based on current outing
 
@@ -1097,6 +1097,15 @@ router.post("/generate-outing", async (req, res) => {
       return res.status(500).json({ error: "Failed to save generated plan" });
     }
 
+    const { error: clearVotesErr } = await db
+      .from("outing_plan_votes")
+      .delete()
+      .eq("outing_id", outingId);
+
+    if (clearVotesErr) {
+      console.error("Failed to clear old plan votes:", clearVotesErr);
+    }
+
     console.log(" - Generated outing plan saved with ID:", savedPlan.id);
     // 5. Return the generated outing plan to the client
     res.json({
@@ -1234,16 +1243,31 @@ router.get("/outings/:id/plan", async (req, res) => {
     }
 
     const normalized = normalizePlans(raw);
+
+    // voting deadline & closed flag
+    const createdMs = data.created_at ? new Date(data.created_at).getTime() : NaN;
+    let voting_deadline: string | null = null;
+    let voting_closed = false;
+
+    if (!isNaN(createdMs)) {
+      const deadlineMs = createdMs + VOTE_WINDOW_SECONDS * 1000;
+      voting_deadline = new Date(deadlineMs).toISOString();
+      voting_closed = Date.now() >= deadlineMs;
+    }
+
     return res.json({
       plan_id: data.id,
       outing_id: data.outing_id,
       created_at: data.created_at,
+      voting_deadline,
+      voting_closed,
       ...normalized,
     });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
+
 
 router.post("/outings/:id/plan-vote", async (req, res) => {
   try {
@@ -1433,5 +1457,210 @@ router.get("/outings/:id/plan-votes", async (req, res) => {
   }
 });
 
+router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member
+    if (outing.creator_id !== me.user_id) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", me.user_id)
+        .maybeSingle();
+
+      if (mErr) return res.status(500).json({ error: mErr.message });
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    const { data: votes, error: vErr } = await db
+      .from("outing_plan_votes")
+      .select("plan_index")
+      .eq("outing_id", outingId);
+
+    if (vErr) return res.status(500).json({ error: vErr.message });
+
+    // build counts, even if there are zero votes
+    const counts = new Map<number, number>();
+    for (const v of votes || []) {
+      const idx = v.plan_index;
+      counts.set(idx, (counts.get(idx) || 0) + 1);
+    }
+
+    let maxVotes = 0;
+    for (const c of counts.values()) {
+      if (c > maxVotes) maxVotes = c;
+    }
+
+    const winners = Array.from(counts.entries())
+      .filter(([_, c]) => c === maxVotes)
+      .map(([idx]) => idx);
+
+    // If there is exactly ONE winner → do NOT reopen
+    // If there are zero winners (no votes) OR multiple winners (tie) → reopen
+    if (winners.length === 1 && maxVotes > 0) {
+      return res
+        .status(400)
+        .json({ error: "Clear winner exists; not reopening voting" });
+    }
+
+    // new voting window
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({ created_at: nowIso })
+      .eq("outing_id", outingId);
+
+    if (updErr) return res.status(500).json({ error: updErr.message });
+
+    const deadlineMs = new Date(nowIso).getTime() + VOTE_WINDOW_SECONDS * 1000;
+
+    return res.json({
+      ok: true,
+      voting_deadline: new Date(deadlineMs).toISOString(),
+    });
+  } catch (e: any) {
+    console.error("reopen-if-tie error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // only creator or admin can end voting early
+    if (!(await isAdminOrCreator(outingId, me.user_id))) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    // make created_at look like the window expired long ago:
+    const nowMs = Date.now();
+    const newCreatedMs = nowMs - VOTE_WINDOW_SECONDS * 1000;
+    const newCreatedIso = new Date(newCreatedMs).toISOString();
+
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({ created_at: newCreatedIso })
+      .eq("outing_id", outingId);
+
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
+
+    const deadlineMs = newCreatedMs + VOTE_WINDOW_SECONDS * 1000;
+
+    return res.json({
+      ok: true,
+      voting_deadline: new Date(deadlineMs).toISOString(), // now
+      voting_closed: true,
+    });
+  } catch (e: any) {
+    console.error("close-early error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // only creator or admin can extend voting
+    if (!(await isAdminOrCreator(outingId, me.user_id))) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    const { data: planRow, error: planErr } = await db
+      .from("outing_plans")
+      .select("created_at")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (planErr) return res.status(500).json({ error: planErr.message });
+    if (!planRow) {
+      return res.status(404).json({ error: "No saved plans for this outing" });
+    }
+
+    const oldCreatedMs = planRow.created_at ? new Date(planRow.created_at).getTime() : NaN;
+    if (isNaN(oldCreatedMs)) {
+      return res.status(500).json({ error: "Invalid plan timestamp" });
+    }
+
+    const currentDeadlineMs = oldCreatedMs + VOTE_WINDOW_SECONDS * 1000;
+
+    // do NOT allow extending if voting already ended
+    if (Date.now() >= currentDeadlineMs) {
+      return res.status(400).json({ error: "Voting has already ended" });
+    }
+
+    const extendMs = 30 * 60 * 1000; // 30 minutes
+    const newCreatedMs = oldCreatedMs + extendMs;
+    const newCreatedIso = new Date(newCreatedMs).toISOString();
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({ created_at: newCreatedIso })
+      .eq("outing_id", outingId);
+
+    if (updErr) return res.status(500).json({ error: updErr.message });
+
+    const newDeadlineMs = newCreatedMs + VOTE_WINDOW_SECONDS * 1000;
+
+    return res.json({
+      ok: true,
+      voting_deadline: new Date(newDeadlineMs).toISOString(),
+      voting_closed: Date.now() >= newDeadlineMs,
+    });
+  } catch (e: any) {
+    console.error("extend-30 error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
 
 export default router;

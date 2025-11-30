@@ -188,6 +188,7 @@
                 [class.active]="activePlanIdx() === i"
                 [disabled]="resolving()"
                 (click)="setActivePlan(i)"
+                [hidden]="winnerPlanIndex !== null && winnerPlanIndex !== i"
               >
                 {{ pl.title || 'Plan ' + (i + 1) }}
 
@@ -206,16 +207,39 @@
                 class="plan-refresh plan-vote-btn"
                 type="button"
                 (click)="voteForActivePlan()"
-                [disabled]="voting || resolving() || generating()"
+                [disabled]="voting || resolving() || generating() || votingClosed"
               >
-                <span>
-                  {{ voting ? 'Saving vote…' : 'Vote for this plan' }}
-                </span>
+                {{ voting ? 'Saving vote…' : 'Vote for this plan' }}
               </button>
-                <span *ngIf="voteTimerActive" class="vote-timer">
-                  Voting ends in {{ voteTimerSeconds }}s
-                </span>
+
+              <span *ngIf="voteTimerActive && !votingClosed" class="vote-timer">
+                Voting ends in {{ formatRemainingTime(voteTimerSeconds) }}
+              </span>
+              <span *ngIf="votingClosed" class="vote-timer">
+                Voting has ended.
+              </span>
+
+              <button
+                *ngIf="isOwner"
+                type="button"
+                class="plan-admin-btn"
+                (click)="endVotingEarly()"
+                [disabled]="votingClosed || resolving() || generating()"
+              >
+                End voting now
+              </button>
+
+              <button
+                *ngIf="isOwner"
+                type="button"
+                class="plan-admin-btn"
+                (click)="extendVotingBy30()"
+                [disabled]="resolving() || generating() || votingClosed"
+              >
+                +30 min
+              </button>
             </div>
+            
           </div>
            <!-- small status line under header -->
           <p *ngIf="voteMessage" class="small">
@@ -270,6 +294,9 @@
                 </ng-template>
               </div>
               <!-- end votes panel -->
+              <div class="winner-banner" *ngIf="votingClosed && winnerPlanIndex !== null">
+                Selected plan: <strong>{{ winnerPlanTitle }}</strong>
+              </div>
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
                 <div class="avg">

@@ -255,16 +255,35 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
       const r = await fetch(`${API}/api/outings/${outingId}/plan`);
       if (!r.ok) return; // not generated yet
       const body = await r.json();
+      // whenever we load plans, start with no winner selected
+      this.winnerPlanIndex = null;
+      this.winnerPlanTitle = null;
       const norm = this.normalizeClient(body);
       this.plans.set(norm.plans);
       this.cdr.detectChanges();
-      if (norm.plans.length) {
-        this.activePlanIdx.set(0);
-        this.cdr.detectChanges();
-        await this.resolveAndPlot(norm.plans[0]);
-        this.startVoteTimer();
 
+    // voting window info from backend
+    const votingDeadlineIso = body.voting_deadline as string | null;
+    this.votingClosed = !!body.voting_closed;
+
+    if (votingDeadlineIso && !this.votingClosed) {
+      const deadlineMs = new Date(votingDeadlineIso).getTime();
+      const nowMs = Date.now();
+      const secondsLeft = Math.floor((deadlineMs - nowMs) / 1000);
+      this.startVoteTimer(secondsLeft);
+    } else {
+      this.voteTimerActive = false;
+      this.voteTimerSeconds = 0;
+      if (this.votingClosed) {
+        this.computeWinningPlan(); // compute winner immediately
       }
+    }
+
+    if (norm.plans.length) {
+      this.activePlanIdx.set(0);
+      this.cdr.detectChanges();
+      await this.resolveAndPlot(norm.plans[0]);
+    }
     } catch (e) {
       // noop; keep UI running
     }
@@ -744,8 +763,23 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
       if (!res.ok) throw new Error(body?.error || 'Failed to generate outing');
       this.toast.success('Outing generated successfully!');
 
-      await this.fetchGeneratedPlan(o.id); //refersh
-      this.loadPlanVotes();
+      // RESET voting / selection state for new plans
+      this.planVotes = [];
+      this.winnerPlanIndex = null;
+      this.winnerPlanTitle = null;
+      this.votingClosed = false;
+      this.voteMessage = '';
+      this.voteTimerActive = false;
+      this.voteTimerSeconds = 0;
+      if (this.voteTimerId) {
+        clearInterval(this.voteTimerId);
+        this.voteTimerId = null;
+      }
+      this.activePlanIdx.set(0);
+
+      // now load the brand-new 3 plans
+      await this.fetchGeneratedPlan(o.id);
+      await this.loadPlanVotes(); 
     } catch (err: any) {
       this.toast.error(err?.message || 'Error generating outing');
       this.cdr.detectChanges();
@@ -839,8 +873,15 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
   voteTimerSeconds = 30;
   voteTimerActive = false;
   private voteTimerId: any = null;
+  votingClosed = false;             
+  winnerPlanTitle: string | null = null;
+  winnerPlanIndex: number | null = null;
 
   async voteForActivePlan() {
+  if (this.votingClosed) {
+    this.voteMessage = 'Voting has ended.';
+    return;
+  }
   const outing = this.outing();
   const email = this.userEmail; 
 
@@ -883,88 +924,129 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
 
   } catch (e: any) {
     console.error('Vote error', e);
-    this.voteMessage =
-      e?.message || 'Could not save your vote. Please try again.';
+    const msg = e?.message || 'Could not save your vote. Please try again.';
+    this.voteMessage = msg;
+
+    if (msg.includes('Voting window has closed')) {
+      this.votingClosed = true;
+      this.voteTimerActive = false;
+      this.voteTimerSeconds = 0;
+      this.computeWinningPlan();
+    }
   } finally {
     this.voting = false;
   }
 }
- ngOnDestroy() {
-    if (this.voteTimerId) {
+ngOnDestroy() {
+  if (this.voteTimerId) {
+    clearInterval(this.voteTimerId);
+    this.voteTimerId = null;
+  }
+}
+
+private startVoteTimer(secondsLeft: number) {
+  if (this.voteTimerId) {
+    clearInterval(this.voteTimerId);
+  }
+
+  if (!Number.isFinite(secondsLeft) || secondsLeft <= 0) {
+    this.voteTimerActive = false;
+    this.voteTimerSeconds = 0;
+    this.votingClosed = true;
+    this.computeWinningPlan();
+    this.cdr.detectChanges();
+    return;
+  }
+
+  this.voteTimerSeconds = secondsLeft;
+  this.voteTimerActive = true;
+  this.votingClosed = false;
+
+  this.voteTimerId = setInterval(() => {
+    this.voteTimerSeconds--;
+
+    if (this.voteTimerSeconds <= 0) {
+      this.voteTimerActive = false;
+      this.votingClosed = true;
       clearInterval(this.voteTimerId);
       this.voteTimerId = null;
+      this.computeWinningPlan();
     }
+
+    this.cdr.detectChanges();
+  }, 1000);
+}
+
+private async computeWinningPlan() {
+  const plans = this.plans() || [];
+  if (!plans.length) {
+    this.winnerPlanTitle = null;
+    this.winnerPlanIndex = null;
+    return;
   }
 
-  private startVoteTimer() {
-    // reset existing timer if any
-    if (this.voteTimerId) {
-      clearInterval(this.voteTimerId);
-    }
+  const counts: number[] = [];
+  let maxVotes = 0;
 
-    this.voteTimerSeconds = 10;
-    this.voteTimerActive = true;
+  for (let i = 0; i < plans.length; i++) {
+    const c = this.voteCountFor(i);
+    counts[i] = c;
+    if (c > maxVotes) maxVotes = c;
+  }
 
-    this.voteTimerId = setInterval(() => {
-      this.voteTimerSeconds--;
+  const winningIndexes = counts
+    .map((c, i) => (c === maxVotes ? i : -1))
+    .filter((i) => i >= 0);
 
-      if (this.voteTimerSeconds <= 0) {
-        this.voteTimerActive = false;
-        clearInterval(this.voteTimerId);
-        this.voteTimerId = null;
-        this.handleVoteTimerFinished();
+  // NO WINNER CASE (tie OR zero votes) → attempt to reopen window
+  if (maxVotes === 0 || winningIndexes.length !== 1) {
+    this.winnerPlanTitle = null;
+    this.winnerPlanIndex = null;
+
+    const outing = this.outing();
+    const email = this.userEmail;
+    if (!outing || !email) return;
+
+    try {
+      const res = await fetch(
+        `${API}/api/outings/${outing.id}/plan-voting/reopen-if-tie`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        }
+      );
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.warn('Reopen voting failed:', body?.error || res.status);
+        return;
       }
 
-      this.cdr.detectChanges();
-    }, 1000);
+      const deadlineIso = body.voting_deadline as string | null;
+      if (deadlineIso) {
+        const deadlineMs = new Date(deadlineIso).getTime();
+        const nowMs = Date.now();
+        const secondsLeft = Math.floor((deadlineMs - nowMs) / 1000);
+
+        this.votingClosed = false;
+        this.startVoteTimer(secondsLeft);
+        this.voteMessage = 'No clear winner. Voting reopened.';
+      }
+    } catch (err) {
+      console.error('Error reopening voting after no-winner', err);
+    }
+
+    return;
   }
 
-  private handleVoteTimerFinished() {
-    const plans = this.plans() || [];
-    if (!plans.length) {
-      alert('Voting ended, but there are no plans.');
-      return;
-    }
-
-    // count votes for each plan
-    const counts: number[] = [];
-    let maxVotes = 0;
-
-    for (let i = 0; i < plans.length; i++) {
-      const c = this.voteCountFor(i); // uses your existing helper
-      counts.push(c);
-      if (c > maxVotes) maxVotes = c;
-    }
-
-    if (maxVotes === 0) {
-      alert('Voting ended. No votes were cast.');
-      return;
-    }
-
-    const winningIndexes = counts
-      .map((c, i) => (c === maxVotes ? i : -1))
-      .filter((i) => i >= 0);
-
-    const titles = winningIndexes.map(
-      (i) => plans[i].title || `Plan ${i + 1}`
-    );
-
-    if (winningIndexes.length === 1) {
-      alert(
-        `Voting ended. Winning plan: "${titles[0]}" with ${maxVotes} vote${
-          maxVotes > 1 ? 's' : ''
-        }.`
-      );
-    } else {
-      alert(
-        `Voting ended. It's a tie between: ${titles
-          .map((t) => `"${t}"`)
-          .join(', ')} with ${maxVotes} vote${
-          maxVotes > 1 ? 's' : ''
-        } each.`
-      );
-    }
-  }
+  // SINGLE WINNER → select that plan and hide the rest
+  const idx = winningIndexes[0];
+  this.winnerPlanIndex = idx;
+  this.winnerPlanTitle = plans[idx].title || `Plan ${idx + 1}`;
+  this.activePlanIdx.set(idx);
+  this.cdr.detectChanges();
+}
  async loadPlanVotes() {
     const o = this.outing();
     const email = this.userEmail;
@@ -983,6 +1065,10 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
 
       this.planVotes = body.planVotes || [];
       this.cdr.detectChanges();
+      if (this.votingClosed) {
+        this.computeWinningPlan();
+      }
+
     } catch (err) {
       console.error('Failed to load plan votes', err);
     } finally {
@@ -1013,5 +1099,101 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
         return v.display_name || v.name || v.email || 'Unknown';
       })
       .join(', ');
+  }
+  async endVotingEarly() {
+  const o = this.outing();
+  const email = this.userEmail;
+  if (!o || !email) return;
+
+  try {
+    const res = await fetch(
+      `${API}/api/outings/${o.id}/plan-voting/close-early`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }
+    );
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body?.error || `HTTP ${res.status}`);
+    }
+
+    // stop timer & mark as closed
+    this.votingClosed = true;
+    this.voteTimerActive = false;
+    this.voteTimerSeconds = 0;
+    if (this.voteTimerId) {
+      clearInterval(this.voteTimerId);
+      this.voteTimerId = null;
+    }
+
+    // reload votes and compute winner 
+    await this.loadPlanVotes();
+    this.computeWinningPlan?.();
+  } catch (e: any) {
+    console.error('endVotingEarly error', e);
+    this.toast.error(e?.message || 'Failed to end voting');
+  }
+}
+
+  async extendVotingBy30() {
+    const o = this.outing();
+    const email = this.userEmail;
+    if (!o || !email) return;
+
+    if (this.votingClosed) {
+      this.voteMessage = 'Voting has already ended.';
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API}/api/outings/${o.id}/plan-voting/extend-30`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        }
+      );
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+
+      const deadlineIso = body.voting_deadline as string | null;
+      if (deadlineIso) {
+        const deadlineMs = new Date(deadlineIso).getTime();
+        const nowMs = Date.now();
+        const secondsLeft = Math.floor((deadlineMs - nowMs) / 1000);
+
+        this.votingClosed = body.voting_closed || false;
+        this.startVoteTimer(secondsLeft);
+        this.voteMessage = 'Voting extended by 30 minutes.';
+      }
+    } catch (e: any) {
+      console.error('extendVotingBy30 error', e);
+      this.toast.error(e?.message || 'Failed to extend voting');
+    }
+  }
+
+  formatRemainingTime(totalSeconds: number | null | undefined): string {
+    if (totalSeconds == null || totalSeconds <= 0) {
+      return '0s';
+    }
+
+    const sec = Math.floor(totalSeconds % 60);
+    const minutes = Math.floor(totalSeconds / 60) % 60;
+    const hours = Math.floor(totalSeconds / 3600);
+
+    const parts: string[] = [];
+    if (hours) parts.push(`${hours}h`);
+    if (minutes) parts.push(`${minutes}m`);
+    // show seconds if under 3 minutes or no hours
+    if (sec && (hours === 0 || minutes < 3)) parts.push(`${sec}s`);
+
+    return parts.join(' ');
   }
 }
