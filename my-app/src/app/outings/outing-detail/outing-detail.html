@@ -212,6 +212,9 @@
                   {{ voting ? 'Saving vote…' : 'Vote for this plan' }}
                 </span>
               </button>
+                <span *ngIf="voteTimerActive" class="vote-timer">
+                  Voting ends in {{ voteTimerSeconds }}s
+                </span>
             </div>
           </div>
            <!-- small status line under header -->

@@ -858,6 +858,7 @@ async function getOutingMembers(outingId: number) {
 }
 
 router.post("/generate-outing", async (req, res) => {
+  
   console.log("=== POST /api/generate-outing START ===");
   // 1. Get all user preferences from the database based on current outing
 

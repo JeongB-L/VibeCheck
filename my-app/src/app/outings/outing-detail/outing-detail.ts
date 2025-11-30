@@ -9,6 +9,7 @@ import {
   signal,
   PLATFORM_ID,
   computed,
+  OnDestroy,
 } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HeaderComponent } from '../../header/header';
@@ -107,7 +108,7 @@ type PlanVoter = {
   styleUrls: ['./outing-detail.css'],
 })
 
-export class OutingDetail implements OnInit, AfterViewInit {
+export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
   constructor(private toast: ToastrService, router: Router, private cdr: ChangeDetectorRef) {}
 
   trackById(_i: number, item: RecItem) {
@@ -261,6 +262,8 @@ export class OutingDetail implements OnInit, AfterViewInit {
         this.activePlanIdx.set(0);
         this.cdr.detectChanges();
         await this.resolveAndPlot(norm.plans[0]);
+        this.startVoteTimer();
+
       }
     } catch (e) {
       // noop; keep UI running
@@ -833,6 +836,9 @@ export class OutingDetail implements OnInit, AfterViewInit {
 
   voting = false;
   voteMessage = '';
+  voteTimerSeconds = 30;
+  voteTimerActive = false;
+  private voteTimerId: any = null;
 
   async voteForActivePlan() {
   const outing = this.outing();
@@ -883,7 +889,82 @@ export class OutingDetail implements OnInit, AfterViewInit {
     this.voting = false;
   }
 }
+ ngOnDestroy() {
+    if (this.voteTimerId) {
+      clearInterval(this.voteTimerId);
+      this.voteTimerId = null;
+    }
+  }
 
+  private startVoteTimer() {
+    // reset existing timer if any
+    if (this.voteTimerId) {
+      clearInterval(this.voteTimerId);
+    }
+
+    this.voteTimerSeconds = 10;
+    this.voteTimerActive = true;
+
+    this.voteTimerId = setInterval(() => {
+      this.voteTimerSeconds--;
+
+      if (this.voteTimerSeconds <= 0) {
+        this.voteTimerActive = false;
+        clearInterval(this.voteTimerId);
+        this.voteTimerId = null;
+        this.handleVoteTimerFinished();
+      }
+
+      this.cdr.detectChanges();
+    }, 1000);
+  }
+
+  private handleVoteTimerFinished() {
+    const plans = this.plans() || [];
+    if (!plans.length) {
+      alert('Voting ended, but there are no plans.');
+      return;
+    }
+
+    // count votes for each plan
+    const counts: number[] = [];
+    let maxVotes = 0;
+
+    for (let i = 0; i < plans.length; i++) {
+      const c = this.voteCountFor(i); // uses your existing helper
+      counts.push(c);
+      if (c > maxVotes) maxVotes = c;
+    }
+
+    if (maxVotes === 0) {
+      alert('Voting ended. No votes were cast.');
+      return;
+    }
+
+    const winningIndexes = counts
+      .map((c, i) => (c === maxVotes ? i : -1))
+      .filter((i) => i >= 0);
+
+    const titles = winningIndexes.map(
+      (i) => plans[i].title || `Plan ${i + 1}`
+    );
+
+    if (winningIndexes.length === 1) {
+      alert(
+        `Voting ended. Winning plan: "${titles[0]}" with ${maxVotes} vote${
+          maxVotes > 1 ? 's' : ''
+        }.`
+      );
+    } else {
+      alert(
+        `Voting ended. It's a tie between: ${titles
+          .map((t) => `"${t}"`)
+          .join(', ')} with ${maxVotes} vote${
+          maxVotes > 1 ? 's' : ''
+        } each.`
+      );
+    }
+  }
  async loadPlanVotes() {
     const o = this.outing();
     const email = this.userEmail;
