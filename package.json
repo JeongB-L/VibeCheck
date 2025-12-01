@@ -3,6 +3,8 @@
     "@angular/google-maps": "^20.2.7",
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@googlemaps/js-api-loader": "^2.0.1",
+    "@types/multer": "^2.0.0",
+    "multer": "^2.0.2",
     "openai": "^6.7.0",
     "typed.js": "^2.1.0"
   },

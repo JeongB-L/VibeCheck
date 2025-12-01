@@ -1,0 +1,104 @@
+<app-header></app-header>
+
+<div class="feed-container">
+  <header class="feed-header">
+    <h1>Outing Highlights</h1>
+    <button class="btn-create" (click)="toggleCreateMode()">
+      <span class="plus-icon">+</span> Create Post
+    </button>
+  </header>
+
+  <div class="create-wrapper" *ngIf="isCreating()">
+    <div class="create-card">
+      <div class="create-header">
+        <h3>New Memory</h3>
+        <button class="btn-close" (click)="toggleCreateMode()">✕</button>
+      </div>
+
+      <div class="create-body">
+        <div class="upload-area" [class.has-image]="previewUrl">
+          <img *ngIf="previewUrl" [src]="previewUrl" class="preview-img" />
+
+          <label *ngIf="!previewUrl" for="file-upload" class="custom-file-upload">
+            <span class="icon">📷</span> Select Photo
+          </label>
+          <input id="file-upload" type="file" (change)="onFileSelected($event)" accept="image/*" />
+        </div>
+
+        <input
+          type="text"
+          class="input-location"
+          [(ngModel)]="newLocation"
+          placeholder="Add location (e.g. The Bean)"
+        />
+
+        <textarea
+          class="input-caption"
+          [(ngModel)]="newCaption"
+          placeholder="Write a caption..."
+          rows="3"
+        >
+        </textarea>
+
+        <button class="btn-submit" (click)="submitPost()">Share Highlight</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="feed-list">
+    <article class="post-card" *ngFor="let post of posts()">
+      <div class="post-header">
+        <img [src]="post.user_avatar || 'assets/default_pfp.jpg'" class="avatar" alt="pfp" />
+        <div class="meta">
+          <div class="username">{{ post.user_name }}</div>
+          <div class="location" *ngIf="post.location">{{ post.location }}</div>
+        </div>
+        <span class="timestamp">{{ post.timestamp | date : 'yyyy-MM-dd' }}</span>
+      </div>
+
+      <div class="post-image-container">
+        <img [src]="post.image_url" class="post-image" alt="Post content" />
+      </div>
+
+      <div class="post-actions">
+        <button class="action-btn" (click)="toggleLike(post)" [class.liked]="post.liked_by_me">
+          {{ post.liked_by_me ? '❤️' : '🤍' }}
+        </button>
+        <button class="action-btn" (click)="toggleComments(post)">🗪</button>
+      </div>
+
+      <div class="likes-count">{{ post.likes }} likes</div>
+
+      <div class="caption-row">
+        <span class="username">{{ post.user_name }}</span>
+        <span class="caption-text">{{ post.caption }}</span>
+      </div>
+
+      <div class="comments-section">
+        <div
+          class="view-comments"
+          *ngIf="post.comments.length && !post.showComments"
+          (click)="toggleComments(post)"
+        >
+          View all {{ post.comments.length }} comments
+        </div>
+
+        <div class="comments-list" *ngIf="post.showComments">
+          <div class="comment-row" *ngFor="let c of post.comments">
+            <span class="comment-user">{{ c.user }}</span> {{ c.text }}
+          </div>
+        </div>
+
+        <div class="add-comment-row">
+          <input
+            #commentInput
+            type="text"
+            placeholder="Add a comment..."
+            (keyup.enter)="addComment(post, commentInput)"
+          />
+          <button (click)="addComment(post, commentInput)">Post</button>
+        </div>
+      </div>
+    </article>
+  </div>
+</div>
