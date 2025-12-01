@@ -17,6 +17,7 @@ import { UserProfilePage } from './user-profile/user-profile';
 import { OutingPreferences } from './outings/outing-preferences/outing-preferences';
 import { ChatPage } from './chat/chat-page';
 import { OutingChatPage } from './outings/outing-chat/outing-chat-page';
+import { HighlightsComponent } from './highlights/highlights';
 
 export const routes: Routes = [
   {
@@ -64,4 +65,8 @@ export const routes: Routes = [
     path: 'outings/:id/chat',
     component: OutingChatPage,
   }, // outing chat page
+  {
+    path: 'highlights',
+    component: HighlightsComponent,
+  },
 ];
