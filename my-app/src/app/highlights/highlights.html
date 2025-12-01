@@ -53,7 +53,7 @@
           <div class="username">{{ post.user_name }}</div>
           <div class="location" *ngIf="post.location">{{ post.location }}</div>
         </div>
-        <span class="timestamp">{{ post.timestamp }}</span>
+        <span class="timestamp">{{ post.timestamp | date : 'yyyy-MM-dd' }}</span>
       </div>
 
       <div class="post-image-container">
@@ -64,7 +64,7 @@
         <button class="action-btn" (click)="toggleLike(post)" [class.liked]="post.liked_by_me">
           {{ post.liked_by_me ? '❤️' : '🤍' }}
         </button>
-        <button class="action-btn" (click)="toggleComments(post)">💬</button>
+        <button class="action-btn" (click)="toggleComments(post)">🗪</button>
       </div>
 
       <div class="likes-count">{{ post.likes }} likes</div>

@@ -858,7 +858,6 @@ async function getOutingMembers(outingId: number) {
 }
 const VOTE_WINDOW_SECONDS = 3600; // 1 hour
 router.post("/generate-outing", async (req, res) => {
-
   console.log("=== POST /api/generate-outing START ===");
   // 1. Get all user preferences from the database based on current outing
 
@@ -1245,7 +1244,9 @@ router.get("/outings/:id/plan", async (req, res) => {
     const normalized = normalizePlans(raw);
 
     // voting deadline & closed flag
-    const createdMs = data.created_at ? new Date(data.created_at).getTime() : NaN;
+    const createdMs = data.created_at
+      ? new Date(data.created_at).getTime()
+      : NaN;
     let voting_deadline: string | null = null;
     let voting_closed = false;
 
@@ -1267,7 +1268,6 @@ router.get("/outings/:id/plan", async (req, res) => {
     return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
-
 
 router.post("/outings/:id/plan-vote", async (req, res) => {
   try {
@@ -1292,18 +1292,16 @@ router.post("/outings/:id/plan-vote", async (req, res) => {
     if (rawUserId && typeof rawUserId === "string" && rawUserId.trim()) {
       userId = rawUserId.trim();
     } else if (email && typeof email === "string" && email.trim()) {
-      const me = await getUserByEmail(email); 
+      const me = await getUserByEmail(email);
       userId = me.user_id;
     }
 
     if (!userId) {
-      return res
-        .status(400)
-        .json({ error: "userId or email is required" });
+      return res.status(400).json({ error: "userId or email is required" });
     }
 
     // outing exists?
-    const outing = await getOuting(outingId); 
+    const outing = await getOuting(outingId);
     if (!outing) {
       return res.status(404).json({ error: "Outing not found" });
     }
@@ -1422,9 +1420,7 @@ router.get("/outings/:id/plan-votes", async (req, res) => {
       return res.status(500).json({ error: uErr.message });
     }
 
-    const byId = new Map(
-      (users || []).map((u: any) => [u.user_id, u])
-    );
+    const byId = new Map((users || []).map((u: any) => [u.user_id, u]));
 
     const grouped: Record<number, any[]> = {};
     for (const v of votes) {
@@ -1451,9 +1447,7 @@ router.get("/outings/:id/plan-votes", async (req, res) => {
     return res.json({ planVotes });
   } catch (e: any) {
     console.error("GET /outings/:id/plan-votes error", e);
-    return res
-      .status(500)
-      .json({ error: e?.message || "Server error" });
+    return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
 
@@ -1628,7 +1622,9 @@ router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
       return res.status(404).json({ error: "No saved plans for this outing" });
     }
 
-    const oldCreatedMs = planRow.created_at ? new Date(planRow.created_at).getTime() : NaN;
+    const oldCreatedMs = planRow.created_at
+      ? new Date(planRow.created_at).getTime()
+      : NaN;
     if (isNaN(oldCreatedMs)) {
       return res.status(500).json({ error: "Invalid plan timestamp" });
     }
