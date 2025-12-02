@@ -425,15 +425,57 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
 // DELETE /api/outings/:id  -> delete
 router.delete("/outings/:id", async (req, res) => {
   try {
+    const id = Number(req.params.id); 
     const email = String(req.query.email ?? "")
       .trim()
       .toLowerCase();
+
+    if (!id) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    } 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
 
     const userId = await getUserIdFromEmail(email);
     if (!userId) return res.status(401).json({ error: "User not found" });
+
+      // load outing
+    const outing = await getOuting(id);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+       // ✅ only creator can delete
+    if (outing.creator_id !== userId) {
+      return res
+        .status(403)
+        .json({ error: "Only the outing owner can delete this outing" });
+    }
+
+     // 🔥 delete all child rows that reference this outing
+    const tables = [
+      "outing_messages",
+      "outing_plan_votes",
+      "outing_plans",
+      "outing_preferences",
+      "outing_members",
+      "outing_invites",
+    ];
+
+
+       for (const table of tables) {
+      const { error: childErr } = await db
+        .from(table)
+        .delete()
+        .eq("outing_id", id);
+      if (childErr) {
+        return res.status(500).json({ error: childErr.message });
+      }
+    }
+
+
+
 
     const { error } = await db
       .from("outings")
