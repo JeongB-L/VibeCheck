@@ -23,10 +23,20 @@
       >
         Pending Requests
       </button>
+      <button
+        class="tab"
+        [class.active]="tab() === 'messages'"
+        (click)="setTab('messages')"
+        role="tab"
+      >
+        Messages
+      </button>
     </nav>
   </header>
 
-  <section *ngIf="errorMsg()" class="alert" role="alert">{{ errorMsg() }}</section>
+  <section *ngIf="errorMsg()" class="alert" role="alert">
+    {{ errorMsg() }}
+  </section>
 
   <!-- Current Friends -->
   <section *ngIf="tab() === 'current'" class="card">
@@ -45,14 +55,20 @@
           </button>
           <div class="sub">{{ f.email }}</div>
         </div>
-        <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
+        <div class="actions-row">
+          <button class="btn" (click)="goChatWith(f)">Message</button>
+          <button class="ghost danger" (click)="removeFriend(f.email)">Remove</button>
+        </div>
       </li>
     </ul>
   </section>
 
-  <!-- Search / Send Request -->
+  <!-- Search / Suggested Friends -->
   <section *ngIf="tab() === 'search'" class="card">
-    <h2 class="h2">Add a Friend</h2>
+    <h2 class="h2">Discover Friends</h2>
+
+    <!-- Add-by-email search bar FIRST -->
+    <h3 class="h3">Add by Email</h3>
     <div class="row">
       <input
         type="email"
@@ -64,6 +80,61 @@
       <button class="btn" [disabled]="adding()" (click)="addFriend()">Send Request</button>
     </div>
     <p class="hint">Enter the email associated with their account.</p>
+
+    <hr style="margin: 16px 0" />
+
+    <!-- Suggested grid -->
+    <h3 class="h3" style="margin-bottom: 8px">Suggested Friends</h3>
+
+    <div *ngIf="suggestLoading()" class="muted">Loading suggestions…</div>
+    <div *ngIf="!suggestLoading() && !suggested().length" class="muted">
+      No suggestions yet. Try joining an outing or updating your profile preferences.
+    </div>
+
+    <div class="suggested-grid" *ngIf="suggested().length">
+      <article class="user-card" *ngFor="let u of suggested()">
+        <div class="user-card-avatar clickable" (click)="viewUser(u)">
+          <img [src]="avatarUrl(u)" alt="" class="user-card-img" (error)="onImgError($event)" />
+        </div>
+
+        <div class="user-card-body">
+          <button class="linklike name" (click)="viewUser(u)">
+            {{ u.display_name || u.name || u.email }}
+          </button>
+          <div class="sub">{{ u.email }}</div>
+
+          <div class="badges">
+            <span class="badge primary" *ngIf="u.has_mutual_outing">Same outing</span>
+            <span
+              class="badge"
+              *ngIf="!u.has_mutual_outing && u.match_reason === 'preferences_only'"
+            >
+              Preference match
+            </span>
+          </div>
+        </div>
+
+        <div class="user-card-actions">
+          <button
+            class="btn"
+            [disabled]="u.requestState === 'sent' || u.requestState === 'accepted' || adding()"
+            (click)="addFriendFromSuggestion(u)"
+          >
+            {{
+              u.requestState === 'accepted'
+                ? 'Friends'
+                : u.requestState === 'sent'
+                ? 'Request Sent'
+                : 'Add Friend'
+            }}
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="load-more-row" *ngIf="hasMoreSuggestions() && suggested().length">
+      <button class="ghost" (click)="loadMoreSuggestions()">Load more</button>
+    </div>
   </section>
 
   <!-- Pending -->
@@ -108,6 +179,37 @@
           <div class="sub">Request sent — {{ u.email }}</div>
         </div>
         <button class="ghost" (click)="cancel(u.email)">Cancel</button>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Messages -->
+  <section *ngIf="tab() === 'messages'" class="card">
+    <h2 class="h2">Messages</h2>
+    <div class="muted" *ngIf="!threads().length">No conversations yet.</div>
+
+    <ul class="list" *ngIf="threads().length">
+      <li class="friend" *ngFor="let t of threads(); let i = index">
+        <div class="avatar-box">
+          <img
+            [src]="t.other_user.avatar_path || 'assets/default_pfp.jpg'"
+            alt=""
+            class="avatar-img"
+            (error)="onImgError($event)"
+          />
+        </div>
+        <div class="meta">
+          <button class="linklike name" (click)="goChatThread(t.thread_id)">
+            {{ t.other_user.display_name || t.other_user.name || t.other_user.email }}
+          </button>
+          <div class="sub">
+            {{ t.last_message?.body || 'No messages yet' }}
+          </div>
+        </div>
+        <div class="actions-row">
+          <button class="btn" (click)="goChatThread(t.thread_id)">Open</button>
+          <span class="ghost" *ngIf="t.unread_count > 0"> Unread: {{ t.unread_count }} </span>
+        </div>
       </li>
     </ul>
   </section>

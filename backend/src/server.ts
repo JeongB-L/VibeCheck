@@ -8,6 +8,7 @@ import placesRouter from "./routes/places";
 import accountRouter from "./routes/account";
 import preferencesRouter from "./routes/preferences";
 import passwordRouter from "./routes/password-update";
+import chatRouter from "./routes/chat";
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -54,6 +55,7 @@ app.get("/api/maps-js", (req, res) => {
 app.use("/api/account", accountRouter);
 app.use("/api", preferencesRouter);
 app.use("/api", passwordRouter);
+app.use("/api", chatRouter);
 
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {

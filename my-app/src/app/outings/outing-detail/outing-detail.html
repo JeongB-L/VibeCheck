@@ -33,12 +33,20 @@
       </ng-template>
 
       <div class="prefs-toolbar">
-        <button class="btn btn-primary" (click)="openPreferences()" aria-label="Set your preferences">
+        <button
+          class="btn btn-primary"
+          (click)="openPreferences()"
+          aria-label="Set your preferences"
+        >
           <span class="icon">⚙️</span>
           <span>Set Preferences</span>
         </button>
 
-        <button class="btn btn-outline" (click)="openGroupProfile()" aria-expanded="{{ showGroupProfile }}">
+        <button
+          class="btn btn-outline"
+          (click)="openGroupProfile()"
+          aria-expanded="{{ showGroupProfile }}"
+        >
           <span class="icon">👥</span>
           <span>{{ showGroupProfile ? 'Hide Group Profile' : 'View Group Profile' }}</span>
           <span class="badge">{{ doneCount() }}/{{ groupMembers().length }}</span>
@@ -57,6 +65,11 @@
             </div>
           </ng-template>
         </button>
+        <!-- Outing Chat Button -->
+        <button class="btn btn-outline" (click)="openOutingChat()">
+          <span class="icon">💬</span>
+          <span>Group Chat</span>
+        </button>
       </div>
 
       <div *ngIf="showGroupProfile" class="prefs-panel">
@@ -72,8 +85,12 @@
                 <span *ngIf="p.__role === 'owner'" class="owner-pill">Owner</span>
               </div>
 
-              <span *ngIf="isDone(p.email)" class="done-badge" aria-label="Preferences completed"
-                title="Preferences completed">
+              <span
+                *ngIf="isDone(p.email)"
+                class="done-badge"
+                aria-label="Preferences completed"
+                title="Preferences completed"
+              >
                 ✔ Done
               </span>
             </header>
@@ -112,28 +129,43 @@
     </div>
   </section>
   <div class="layout">
-
-
-
     <section class="left">
-
       <!-- Left column view switch -->
       <nav class="left-switch">
-        <button [class.active]="leftView() === 'recs'" (click)="leftView.set('recs')">Recommendations</button>
-        <button [class.active]="leftView() === 'plans'" (click)="leftView.set('plans')">Outing Plans</button>
+        <button [class.active]="leftView() === 'recs'" (click)="setLeftView('recs')">
+          Recommendations
+        </button>
+        <button [class.active]="leftView() === 'plans'" (click)="setLeftView('plans')">
+          Outing Plans
+        </button>
       </nav>
       <!-- Recommendations panel -->
       <ng-container *ngIf="leftView() === 'recs'">
         <nav class="tabs">
           <button [class.active]="tab() === 'food'" (click)="loadTab('food')">Food & drink</button>
-          <button [class.active]="tab() === 'stay'" (click)="loadTab('stay')">Places to stay</button>
+          <button [class.active]="tab() === 'stay'" (click)="loadTab('stay')">
+            Places to stay
+          </button>
           <button [class.active]="tab() === 'do'" (click)="loadTab('do')">Things to do</button>
         </nav>
 
         <div class="cards">
-          <article class="card" *ngFor="let p of items(); trackBy: trackById" [class.active]="selectedId() === p.id"
-            (mouseenter)="hoverItem(p)" (mouseleave)="hoverItem(null)" (click)="openInMaps(p)">
-            <img *ngIf="p.photo" [src]="p.photo" alt="" class="thumb" loading="lazy" referrerpolicy="no-referrer" />
+          <article
+            class="card"
+            *ngFor="let p of items(); trackBy: trackById"
+            [class.active]="selectedId() === p.id"
+            (mouseenter)="hoverItem(p)"
+            (mouseleave)="hoverItem(null)"
+            (click)="openInMaps(p)"
+          >
+            <img
+              *ngIf="p.photo"
+              [src]="p.photo"
+              alt=""
+              class="thumb"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+            />
             <div class="card-body">
               <div class="card-title">{{ p.name }}</div>
               <div class="card-subtitle">{{ p.address }}</div>
@@ -150,43 +182,168 @@
             <h2>Outing Plans</h2>
 
             <div class="plan-switcher" *ngIf="P.length; else noPlansYet">
-              <button *ngFor="let pl of P; let i = index" class="plan-tab" [class.active]="activePlanIdx() === i"
-                [disabled]="resolving()" (click)="setActivePlan(i)">
-                {{ pl.title || ('Plan ' + (i+1)) }}
+              <button
+                *ngFor="let pl of P; let i = index"
+                class="plan-tab"
+                [class.active]="activePlanIdx() === i"
+                [disabled]="resolving()"
+                (click)="setActivePlan(i)"
+                [hidden]="winnerPlanIndex !== null && winnerPlanIndex !== i"
+              >
+                {{ pl.title || 'Plan ' + (i + 1) }}
+
+              <!-- vote count badge -->
+              <span
+                class="badge"
+                *ngIf="voteCountFor(i) as c"
+                [attr.title]="planVoterNamesTooltip(i)"
+              >
+                {{ c }} vote{{ c > 1 ? 's' : '' }}
+              </span>
               </button>
 
+              <!-- vote button -->
+              <button
+                class="plan-refresh plan-vote-btn"
+                type="button"
+                (click)="voteForActivePlan()"
+                [disabled]="voting || resolving() || generating() || votingClosed"
+              >
+                {{ voting ? 'Saving vote…' : 'Vote for this plan' }}
+              </button>
 
+              <span *ngIf="voteTimerActive && !votingClosed" class="vote-timer">
+                Voting ends in {{ formatRemainingTime(voteTimerSeconds) }}
+              </span>
+              <span *ngIf="votingClosed" class="vote-timer">
+                Voting has ended.
+              </span>
+
+              <button
+                *ngIf="isOwner"
+                type="button"
+                class="plan-admin-btn"
+                (click)="endVotingEarly()"
+                [disabled]="votingClosed || resolving() || generating()"
+              >
+                End voting now
+              </button>
+
+              <button
+                *ngIf="isOwner"
+                type="button"
+                class="plan-admin-btn"
+                (click)="extendVotingBy30()"
+                [disabled]="resolving() || generating() || votingClosed"
+              >
+                +30 min
+              </button>
             </div>
+            
           </div>
-
+           <!-- small status line under header -->
+          <p *ngIf="voteMessage" class="small">
+            {{ voteMessage }}
+          </p>
           <ng-container *ngIf="P.length; else noPlansYet">
             <!-- bind active plan once -->
-            <ng-container *ngIf="P[activePlanIdx()] as A">
+            <ng-container *ngIf="activePlan() as A">
               <div class="badges">
-                <span *ngFor="let b of (A.badge || [])" class="badge">{{ b }}</span>
+                <span *ngFor="let b of A.badge || []" class="badge">{{ b }}</span>
                 <span *ngIf="A.total_budget_estimate" class="budget">
                   Budget: {{ A.total_budget_estimate }}
                 </span>
               </div>
 
               <p class="overview" *ngIf="A.overview">{{ A.overview }}</p>
+              <!-- start of votes panel -->
+              <div class="votes" *ngIf="currentPlanVotes() as PV">
+                <div class="votes-header">
+                  <span class="votes-title">Votes</span>
+                  <span class="votes-count">
+                    {{ PV.voters.length || 0 }} vote{{ PV.voters.length === 1 ? '' : 's' }}
+                  </span>
+                </div>
 
+                <div class="votes-body" *ngIf="PV.voters.length; else noVotes">
+                  <div class="votes-avatars">
+                    <img
+                      *ngFor="let v of PV.voters"
+                      class="votes-ava"
+                      [src]="v.avatar_url || 'assets/default_pfp.jpg'"
+                      [alt]="v.display_name || v.name || v.email"
+                    />
+                  </div>
+
+                  <div class="votes-names">
+                    <span
+                      class="votes-name"
+                      *ngFor="let v of PV.voters; let i = index"
+                    >
+                      <strong *ngIf="v.isMe">You</strong>
+                      <span *ngIf="!v.isMe">
+                        {{ v.display_name || v.name || v.email }}
+                      </span>
+                      <span *ngIf="i < PV.voters.length - 1"> · </span>
+                    </span>
+                  </div>
+                </div>
+
+                <ng-template #noVotes>
+                  <div class="votes-empty">No votes yet for this plan.</div>
+                </ng-template>
+              </div>
+              <!-- end votes panel -->
+              <div class="winner-banner" *ngIf="votingClosed && winnerPlanIndex !== null">
+                Selected plan: <strong>{{ winnerPlanTitle }}</strong>
+              </div>
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
                 <div class="avg">
                   <strong>Avg Fairness: </strong>
-                  <span class="avg-num">{{ (A.avgFairnessIndex ?? 0) | number:'1.0-0' }}%</span>
+                  <span class="avg-num">{{ A.avgFairnessIndex ?? 0 | number : '1.0-0' }}%</span>
+                </div>
+
+                <!-- AI Summary Panel -->
+                <div class="ai-summary">
+                  <div class="ai-summary-header">
+                    <h4>AI Summary</h4>
+                    <button
+                      class="btn btn-outline btn-small"
+                      (click)="generateAISummary()"
+                      [disabled]="generatingSummary()"
+                      title="Generate a fresh AI summary for this plan"
+                    >
+                      <span class="icon">✨</span>
+                      <span *ngIf="!generatingSummary(); else summarizing"
+                        >Generate AI Summary</span
+                      >
+                      <ng-template #summarizing>
+                        <span>Generating…</span>
+                      </ng-template>
+                    </button>
+                  </div>
+
+                  <p
+                    class="streaming-text"
+                    #summaryText
+                    *ngIf="$any(A.summary)?.text !== undefined; else noSummary"
+                  >
+                    {{ $any(A.summary)?.text }}
+                  </p>
+                  <ng-template #noSummary>
+                    <p class="placeholder">No AI summary yet – click the button to generate one.</p>
+                  </ng-template>
                 </div>
 
                 <div class="scores" *ngIf="A.fairness_scores">
-                  <div class="score-row" *ngFor="let kv of (A.fairness_scores | keyvalue)">
+                  <div class="score-row" *ngFor="let kv of A.fairness_scores | keyvalue">
                     <span class="who">{{ kv.key }}</span>
                     <span class="bar"><span class="fill" [style.width.%]="kv.value"></span></span>
                     <span class="val">{{ kv.value }}%</span>
                   </div>
                 </div>
               </div>
-
 
               <!-- timeline -->
               <div class="timeline-days">
@@ -211,7 +368,7 @@
                           </div>
 
                           <div class="chips" *ngIf="(s.matches?.length ?? 0) > 0">
-                            <span *ngFor="let m of (s.matches ?? [])" class="chip">{{ m }}</span>
+                            <span *ngFor="let m of s.matches ?? []" class="chip">{{ m }}</span>
                           </div>
                           <div class="small" *ngIf="s.description">{{ s.description }}</div>
                           <div class="small" *ngIf="s.cost_estimate">{{ s.cost_estimate }}</div>
@@ -223,12 +380,11 @@
                 </div>
               </div>
 
-               <!-- === Tips === -->
+              <!-- === Tips === -->
               <div class="tips" *ngIf="A.tips">
                 <h4>Tips</h4>
                 <p>{{ A.tips }}</p>
               </div>
-
 
               <div class="resolving" *ngIf="resolving()">Resolving map pins…</div>
             </ng-container>
@@ -237,15 +393,17 @@
           <ng-template #noPlansYet>
             <div class="no-plans">
               No generated plans yet.
-              <button class="plan-refresh" (click)="refreshPlans()" [disabled]="generating() || resolving()">
+              <button
+                class="plan-refresh"
+                (click)="refreshPlans()"
+                [disabled]="generating() || resolving()"
+              >
                 Load saved plan
               </button>
             </div>
           </ng-template>
         </section>
-
       </ng-container>
-
     </section>
 
     <!-- right: map (plain JS) -->

@@ -19,8 +19,17 @@ export async function uploadAvatarToStorage(
   return path;
 }
 
-export function publicUrlFromPath(path: string | null | undefined) {
+/**
+ * Generates a public URL for a given path.
+ */
+export function publicUrlFromPath(
+  path: string | null | undefined,
+  bucket: string = "avatars"
+) {
   if (!path) return null;
-  const { data } = sb.storage.from("avatars").getPublicUrl(path);
+  if (path.startsWith("http")) return path;
+
+  const { data } = sb.storage.from(bucket).getPublicUrl(path);
+  // We append a timestamp to bust cache if needed, though for feed posts it's less critical than avatars
   return data.publicUrl ? `${data.publicUrl}?t=${Date.now()}` : null;
 }
