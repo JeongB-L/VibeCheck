@@ -900,15 +900,13 @@ async function getOutingMembers(outingId: number) {
 }
 const VOTE_WINDOW_SECONDS = 3600; // 1 hour
 router.post("/generate-outing", async (req, res) => {
-  console.log("=== POST /api/generate-outing START ===");
-  // 1. Get all user preferences from the database based on current outing
+   console.log("=== POST /api/generate-outing START ===");
 
   const { outingId } = req.body;
   if (!outingId) {
     return res.status(400).json({ error: "outingId is required" });
   }
 
-  // 2. Get the outing date from the database
   const outing = await getOuting(outingId);
   if (!outing) {
     return res.status(404).json({ error: "Outing not found" });
@@ -919,23 +917,34 @@ router.post("/generate-outing", async (req, res) => {
   const startDate = new Date(outing.start_date);
   const endDate = new Date(outing.end_date);
 
-  // Validate dates
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     return res.status(400).json({ error: "Invalid outing dates" });
   }
+
   let participantNames: string[] = [];
+
   // 2.1 Get all user preferences for this outing
   try {
-    // 2.1.1 Get all member user_ids for the outing
     console.log(" - Fetching outing members for outingId:", outingId);
-    const { owner, members } = await getOutingMembers(outingId);
-  participantNames = [owner, ...(members ?? [])]
-    .filter(Boolean)
-    .map((p: any) =>
-      p.display_name || p.name || (p.email ? p.email.split("@")[0] : "Unknown")
-    );
-    console.log("particiapnt names: ", participantNames) ;
 
+    // 🔹 owner + members with nice display data
+    const { owner, members } = await getOutingMembers(outingId);
+
+    const participants = [owner, ...(members ?? [])].filter(Boolean);
+
+    // 🔹 Build userId -> name map
+    const nameById = new Map<string, string>();
+    for (const p of participants as any[]) {
+      const label =
+        p.display_name ||
+        p.name ||
+        (p.email ? p.email.split("@")[0] : "Unknown");
+      if (p.user_id) {
+        nameById.set(String(p.user_id), label);
+      }
+    }
+
+    // 2.1.1 Get all member user_ids for the outing (from outing_members)
     const { data: memberRows, error: mErr } = await db
       .from("outing_members")
       .select("user_id")
@@ -943,14 +952,16 @@ router.post("/generate-outing", async (req, res) => {
 
     if (mErr) return res.status(500).json({ error: mErr.message });
 
-    // include the creator as participant as well
     const memberIds = (memberRows || []).map((r: any) => r.user_id);
-    const userIds = Array.from(new Set([...memberIds, outing.creator_id]));
+    const userIds = Array.from(
+      new Set<string>([...memberIds, outing.creator_id])
+    ).map(String); // normalize to string
 
-    // 2.1.2 Fetch preferences for those user_ids for this outing
     if (!userIds.length) {
       req.body.userPreferences = [];
+      participantNames = [];
     } else {
+      // 2.1.2 Fetch preferences for each user for this outing
       const { data: prefsRows, error: pErr } = await db
         .from("outing_preferences")
         .select("user_id, activities, food, budget")
@@ -959,25 +970,37 @@ router.post("/generate-outing", async (req, res) => {
 
       if (pErr) return res.status(500).json({ error: pErr.message });
 
-      // normalize into a map and ensure default shapes for missing prefs
-      const prefsMap = new Map(
-        (prefsRows || []).map((p: any) => [p.user_id, p])
+      const prefsMap = new Map<string, any>(
+        (prefsRows || []).map((p: any) => [String(p.user_id), p])
       );
 
-      const userPreferences = userIds.map((uid) => ({
-        user_id: uid,
-        preferences: prefsMap.get(uid) || {
-          activities: [],
-          food: [],
-          budget: [],
-        },
-      }));
+      // 🔹 Build userPreferences WITH names attached
+      const userPreferences = userIds.map((uid) => {
+        const prefRow = prefsMap.get(uid);
+        return {
+          user_id: uid,
+          name: nameById.get(uid) || uid, // <- ⚠️ this is the key change
+          preferences:
+            prefRow || {
+              activities: [],
+              food: [],
+              budget: [],
+            },
+        };
+      });
 
       req.body.userPreferences = userPreferences;
+
+      // 🔹 Also keep a flat list of participant names for your prompt
+      participantNames = userPreferences.map(
+        (u: any) => u.name || u.user_id || "Unknown"
+      );
     }
+
+    console.log("participantNames:", participantNames);
+    console.log("userPreferences:", req.body.userPreferences);
   } catch (err: any) {
     console.error("Failed to load outing preferences", err);
-
     return res
       .status(500)
       .json({ error: err?.message || "Failed to load preferences" });
@@ -998,8 +1021,7 @@ router.post("/generate-outing", async (req, res) => {
     endDate.toISOString().split("T")[0]
   } (assume full day unless specified)
 
-  Participants names:
-  ${JSON.stringify(participantNames, null, 2)}
+  
   Group Preferences (aggregated from all participants):
   ${JSON.stringify(req.body.userPreferences, null, 2)}
   
