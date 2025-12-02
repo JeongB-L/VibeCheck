@@ -877,7 +877,7 @@ router.post("/generate-outing", async (req, res) => {
     .map((p: any) =>
       p.display_name || p.name || (p.email ? p.email.split("@")[0] : "Unknown")
     );
-    console.log(participantNames) 
+    console.log("particiapnt names: ", participantNames) ;
 
     const { data: memberRows, error: mErr } = await db
       .from("outing_members")
@@ -930,6 +930,7 @@ router.post("/generate-outing", async (req, res) => {
   // 3. Generate an outing plan based on preferences and date
   // 		a. write a prompt for openAI api
   console.log(" - Generating outing plan via OpenAI for outingId:", outingId);
+  console.log("req.body.userPreferences: ", req.body.userPreferences)
   let prompt = `You are a helpful travel planner. Generate 3 detailed outing plans for the following group outing, balancing preferences for fairness:
   
   Outing Title: ${outingTitle}
@@ -945,6 +946,7 @@ router.post("/generate-outing", async (req, res) => {
   ${JSON.stringify(participantNames, null, 2)}
   Group Preferences (aggregated from all participants):
   ${JSON.stringify(req.body.userPreferences, null, 2)}
+  
   
   Create 3 alternative day-by-day itineraries that incorporate the group's preferred activities, food options, and budget considerations. For each plan, ensure a timeline-based structure with dated activities and meals. Compute a fairness score for each user (0-100%) based on how much of their individual preferences (activities, food, budget) are reflected in the plan—higher scores mean better balance across the group. Also include total average fairness score (0-100%). Also include badges for itinerary like "Highest Thrill", "Art Forward" that best suit each itinerary. 
   
@@ -1004,7 +1006,7 @@ router.post("/generate-outing", async (req, res) => {
   
 	Ensure each plan is fun, feasible for the location and dates,
 	varies in focus (e.g., one budget-heavy, one adventure-focused),
-	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences. Also use the particpant names given above for fairness score and matches`;
+	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences. Also use the particpant names given above for fairness score and matches. And the badges should highlight the key concepts and focus of the outing.`;
 
   //		b. call openAI api with the prompt
   console.log(" - Sending prompt to OpenAI API");
