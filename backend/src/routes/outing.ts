@@ -2,6 +2,7 @@ import { Router } from "express";
 import { supabase as db } from "../lib/supabase";
 import { publicUrlFromPath } from "../utils/storage";
 import openAI, { OpenAI } from "openai";
+import PDFDocument from "pdfkit";
 
 // --- helpers: robust normalizer for GPT output ---
 type PlanStop = {
@@ -425,14 +426,14 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
 // DELETE /api/outings/:id  -> delete
 router.delete("/outings/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id); 
+    const id = Number(req.params.id);
     const email = String(req.query.email ?? "")
       .trim()
       .toLowerCase();
 
     if (!id) {
       return res.status(400).json({ error: "Invalid outing id" });
-    } 
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
@@ -440,20 +441,20 @@ router.delete("/outings/:id", async (req, res) => {
     const userId = await getUserIdFromEmail(email);
     if (!userId) return res.status(401).json({ error: "User not found" });
 
-      // load outing
+    // load outing
     const outing = await getOuting(id);
     if (!outing) {
       return res.status(404).json({ error: "Outing not found" });
     }
 
-       // ✅ only creator can delete
+    // ✅ only creator can delete
     if (outing.creator_id !== userId) {
       return res
         .status(403)
         .json({ error: "Only the outing owner can delete this outing" });
     }
 
-     // 🔥 delete all child rows that reference this outing
+    // 🔥 delete all child rows that reference this outing
     const tables = [
       "outing_messages",
       "outing_plan_votes",
@@ -463,8 +464,7 @@ router.delete("/outings/:id", async (req, res) => {
       "outing_invites",
     ];
 
-
-       for (const table of tables) {
+    for (const table of tables) {
       const { error: childErr } = await db
         .from(table)
         .delete()
@@ -473,9 +473,6 @@ router.delete("/outings/:id", async (req, res) => {
         return res.status(500).json({ error: childErr.message });
       }
     }
-
-
-
 
     const { error } = await db
       .from("outings")
@@ -900,7 +897,7 @@ async function getOutingMembers(outingId: number) {
 }
 const VOTE_WINDOW_SECONDS = 3600; // 1 hour
 router.post("/generate-outing", async (req, res) => {
-   console.log("=== POST /api/generate-outing START ===");
+  console.log("=== POST /api/generate-outing START ===");
 
   const { outingId } = req.body;
   if (!outingId) {
@@ -980,12 +977,11 @@ router.post("/generate-outing", async (req, res) => {
         return {
           user_id: uid,
           name: nameById.get(uid) || uid, // <- ⚠️ this is the key change
-          preferences:
-            prefRow || {
-              activities: [],
-              food: [],
-              budget: [],
-            },
+          preferences: prefRow || {
+            activities: [],
+            food: [],
+            budget: [],
+          },
         };
       });
 
@@ -1009,7 +1005,7 @@ router.post("/generate-outing", async (req, res) => {
   // 3. Generate an outing plan based on preferences and date
   // 		a. write a prompt for openAI api
   console.log(" - Generating outing plan via OpenAI for outingId:", outingId);
-  console.log("req.body.userPreferences: ", req.body.userPreferences)
+  console.log("req.body.userPreferences: ", req.body.userPreferences);
   let prompt = `You are a helpful travel planner. Generate 3 detailed outing plans for the following group outing, balancing preferences for fairness:
   
   Outing Title: ${outingTitle}
@@ -1719,6 +1715,166 @@ router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
   } catch (e: any) {
     console.error("extend-30 error", e);
     return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.get("/outings/:id/final-plan-pdf", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const planIndex = Number(req.query.planIndex || 0);
+
+    // Load saved plans
+    const { data, error } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return res.status(404).json({ error: "No plans found" });
+    }
+
+    const raw =
+      typeof data.plans === "string" ? JSON.parse(data.plans) : data.plans;
+
+    const plan = raw?.plans?.[planIndex];
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
+    }
+
+    // Load outing info
+    const { data: outingRow, error: outingErr } = await db
+      .from("outings")
+      .select("title, start_date")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    if (outingErr || !outingRow) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // Build safe dynamic filename
+    const safeTitle = (outingRow.title || "Outing")
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase();
+
+    const dateStr = outingRow.start_date
+      ? new Date(outingRow.start_date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const filename = `VibeCheck_${safeTitle}_Final_Plan_${dateStr}.pdf`;
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+
+    // Headers set for PDF download
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+
+    // cover page
+    doc
+      .fontSize(28)
+      .fillColor("#1976d2")
+      .text("VibeCheck Itinerary", { align: "center" });
+
+    doc.moveDown();
+    doc
+      .fontSize(16)
+      .fillColor("black")
+      .text(plan.title || "Selected Outing Plan", { align: "center" });
+
+    doc.moveDown();
+    doc
+      .fontSize(12)
+      .fillColor("#555")
+      .text(`Trip Date: ${dateStr}`, { align: "center" });
+
+    doc.moveDown(2);
+
+    if (plan.overview) {
+      doc.fontSize(14).fillColor("#333").text("Overview");
+      doc.moveDown(0.5);
+      doc.fontSize(12).fillColor("black").text(plan.overview);
+    }
+
+    doc.moveDown(2);
+
+    // highlights
+    doc
+      .fontSize(12)
+      .fillColor("black")
+      .text(`Budget: ${plan.total_budget_estimate || "—"}`)
+      .moveDown(0.3)
+      .text(`Avg Fairness Score: ${plan.avgFairnessIndex ?? "—"}%`);
+
+    if (Array.isArray(plan.badge)) {
+      doc
+        .moveDown(0.5)
+        .fillColor("#1976d2")
+        .text(`Badges: ${plan.badge.join(" • ")}`);
+    }
+
+    doc.addPage();
+
+    // itinerary section
+    doc.fontSize(20).fillColor("#1976d2").text("Daily Itinerary");
+    doc.moveDown();
+
+    for (const day of plan.itinerary || []) {
+      doc
+        .fontSize(16)
+        .fillColor("black")
+        .text(day.date || "Day", { underline: true });
+
+      doc.moveDown(0.5);
+
+      for (const stop of day.timeline || []) {
+        doc.fontSize(12).fillColor("#000");
+        doc
+          .fontSize(12)
+          .fillColor("#000")
+          .text(`${stop.time || ""} - ${stop.name || ""}`);
+
+        if (stop.address)
+          doc.fontSize(10).fillColor("#555").text(`Address: ${stop.address}`);
+
+        if (stop.description)
+          doc.fontSize(10).fillColor("#333").text(`Notes: ${stop.description}`);
+
+        if (stop.cost_estimate)
+          doc
+            .fontSize(10)
+            .fillColor("#333")
+            .text(`Cost: ${stop.cost_estimate}`);
+
+        doc.moveDown(0.6);
+      }
+
+      doc.moveDown(1.2);
+    }
+
+    // Ai SUMMARY SECTION
+    if (plan.summary?.text) {
+      doc.addPage();
+
+      doc.fontSize(20).fillColor("#1976d2").text("AI Summary");
+
+      doc.moveDown();
+      doc.fontSize(12).fillColor("black").text(plan.summary.text, {
+        lineGap: 4,
+      });
+    }
+
+    doc.end();
+  } catch (err: any) {
+    console.error("PDF Error:", err);
+
+    // Only send error if headers NOT already streamed
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
   }
 });
 
