@@ -298,6 +298,10 @@
                 </button>
               </div>
 
+              <button class="btn ghost" (click)="generateShareLink()">Copy Shareable Link</button>
+
+              <span *ngIf="shareLoading()">Generating link…</span>
+
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
                 <div class="avg">

@@ -1187,4 +1187,33 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
 
     window.open(url, '_blank');
   }
+
+  shareLoading = signal(false);
+  async generateShareLink() {
+    const outingId = this.outing()?.id;
+
+    if (!outingId) {
+      alert('Outing not loaded yet.');
+      return;
+    }
+
+    this.shareLoading.set(true);
+
+    try {
+      const res = await fetch(`http://localhost:3001/api/outings/${outingId}/share`, {
+        method: 'POST',
+      });
+
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || 'Failed');
+
+      await navigator.clipboard.writeText(body.shareUrl);
+      this.toast.success('Shareable link copied!', 'Success');
+    } catch (e) {
+      console.error(e);
+      this.toast.error('Failed to generate share link', 'Error');
+    } finally {
+      this.shareLoading.set(false);
+    }
+  }
 }
