@@ -1745,7 +1745,7 @@ router.get("/outings/:id/final-plan-pdf", async (req, res) => {
     // Load outing info
     const { data: outingRow, error: outingErr } = await db
       .from("outings")
-      .select("title, start_date")
+      .select("title, start_date, end_date")
       .eq("id", outingId)
       .maybeSingle();
 
@@ -1758,11 +1758,18 @@ router.get("/outings/:id/final-plan-pdf", async (req, res) => {
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
 
-    const dateStr = outingRow.start_date
+    const startStr = outingRow.start_date
       ? new Date(outingRow.start_date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
 
-    const filename = `VibeCheck_${safeTitle}_Final_Plan_${dateStr}.pdf`;
+    const endStr = outingRow.end_date
+      ? new Date(outingRow.end_date).toISOString().slice(0, 10)
+      : startStr;
+
+    const dateRangeStr =
+      startStr === endStr ? startStr : `${startStr} - ${endStr}`;
+
+    const filename = `VibeCheck_${safeTitle}_Final_Plan_${startStr}.pdf`;
 
     // Create PDF
     const doc = new PDFDocument({ margin: 40, size: "A4" });
@@ -1789,7 +1796,7 @@ router.get("/outings/:id/final-plan-pdf", async (req, res) => {
     doc
       .fontSize(12)
       .fillColor("#555")
-      .text(`Trip Date: ${dateStr}`, { align: "center" });
+      .text(`Trip Dates: ${dateRangeStr}`, { align: "center" });
 
     doc.moveDown(2);
 
