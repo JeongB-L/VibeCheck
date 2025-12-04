@@ -192,14 +192,14 @@
               >
                 {{ pl.title || 'Plan ' + (i + 1) }}
 
-              <!-- vote count badge -->
-              <span
-                class="badge"
-                *ngIf="voteCountFor(i) as c"
-                [attr.title]="planVoterNamesTooltip(i)"
-              >
-                {{ c }} vote{{ c > 1 ? 's' : '' }}
-              </span>
+                <!-- vote count badge -->
+                <span
+                  class="badge"
+                  *ngIf="voteCountFor(i) as c"
+                  [attr.title]="planVoterNamesTooltip(i)"
+                >
+                  {{ c }} vote{{ c > 1 ? 's' : '' }}
+                </span>
               </button>
 
               <!-- vote button -->
@@ -215,9 +215,7 @@
               <span *ngIf="voteTimerActive && !votingClosed" class="vote-timer">
                 Voting ends in {{ formatRemainingTime(voteTimerSeconds) }}
               </span>
-              <span *ngIf="votingClosed" class="vote-timer">
-                Voting has ended.
-              </span>
+              <span *ngIf="votingClosed" class="vote-timer"> Voting has ended. </span>
 
               <button
                 *ngIf="isOwner"
@@ -239,9 +237,8 @@
                 +30 min
               </button>
             </div>
-            
           </div>
-           <!-- small status line under header -->
+          <!-- small status line under header -->
           <p *ngIf="voteMessage" class="small">
             {{ voteMessage }}
           </p>
@@ -276,10 +273,7 @@
                   </div>
 
                   <div class="votes-names">
-                    <span
-                      class="votes-name"
-                      *ngFor="let v of PV.voters; let i = index"
-                    >
+                    <span class="votes-name" *ngFor="let v of PV.voters; let i = index">
                       <strong *ngIf="v.isMe">You</strong>
                       <span *ngIf="!v.isMe">
                         {{ v.display_name || v.name || v.email }}
@@ -297,6 +291,13 @@
               <div class="winner-banner" *ngIf="votingClosed && winnerPlanIndex !== null">
                 Selected plan: <strong>{{ winnerPlanTitle }}</strong>
               </div>
+
+              <div class="final-pdf" *ngIf="votingClosed && winnerPlanIndex !== null">
+                <button class="btn btn-primary" (click)="downloadFinalPlanPDF()">
+                  📄 Download Final Plan (PDF)
+                </button>
+              </div>
+
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
                 <div class="avg">
