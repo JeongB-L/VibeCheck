@@ -292,15 +292,21 @@
                 Selected plan: <strong>{{ winnerPlanTitle }}</strong>
               </div>
 
-              <div class="final-pdf" *ngIf="votingClosed && winnerPlanIndex !== null">
+              <div class="final-pdf actions-row" *ngIf="votingClosed && winnerPlanIndex !== null">
                 <button class="btn btn-primary" (click)="downloadFinalPlanPDF()">
                   📄 Download Final Plan (PDF)
                 </button>
+
+                <button
+                  class="btn btn-primary"
+                  (click)="generateShareLink()"
+                  [disabled]="shareLoading()"
+                >
+                  🔗 Copy Shareable Link
+                </button>
+
+                <span class="loading-text" *ngIf="shareLoading()"> Generating link… </span>
               </div>
-
-              <button class="btn ghost" (click)="generateShareLink()">Copy Shareable Link</button>
-
-              <span *ngIf="shareLoading()">Generating link…</span>
 
               <!-- === Fairness panel === -->
               <div class="fairness" *ngIf="A.avgFairnessIndex != null || A.fairness_scores">
