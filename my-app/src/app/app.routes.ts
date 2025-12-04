@@ -69,4 +69,9 @@ export const routes: Routes = [
     path: 'highlights',
     component: HighlightsComponent,
   },
+  {
+    path: 'share/:token',
+    loadComponent: () =>
+      import('./pages/shared-outing/shared-outing.page').then((m) => m.SharedOutingPage),
+  },
 ];

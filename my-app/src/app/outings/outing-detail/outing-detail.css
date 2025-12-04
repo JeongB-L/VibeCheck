@@ -540,8 +540,7 @@
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.plan-tab:hover
-{
+.plan-tab:hover {
   background: #eef2f7;
   border-color: #c5cbd8;
 }
@@ -1062,7 +1061,7 @@
 }
 .plan-vote-btn {
   margin-left: 8px;
-  background: #16a34a;        /* green */
+  background: #16a34a; /* green */
   color: #ffffff;
   border-color: #15803d;
   font-weight: 600;
@@ -1126,3 +1125,9 @@
   cursor: default;
 }
 
+.actions-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}

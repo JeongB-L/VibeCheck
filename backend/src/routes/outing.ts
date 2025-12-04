@@ -3,6 +3,7 @@ import { supabase as db } from "../lib/supabase";
 import { publicUrlFromPath } from "../utils/storage";
 import openAI, { OpenAI } from "openai";
 import PDFDocument from "pdfkit";
+import crypto from "crypto";
 
 // --- helpers: robust normalizer for GPT output ---
 type PlanStop = {
@@ -1882,6 +1883,126 @@ router.get("/outings/:id/final-plan-pdf", async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: "Failed to generate PDF" });
     }
+  }
+});
+
+function getFrontendUrl() {
+  return process.env.FRONTEND_URL || "http://localhost:4200";
+}
+
+router.post("/outings/:id/share", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    const FRONTEND_URL = getFrontendUrl();
+
+    // Check if link already exists
+    const { data: existing, error: existingErr } = await db
+      .from("outing_share_links")
+      .select("share_token")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (existingErr) {
+      return res.status(500).json({ error: existingErr.message });
+    }
+
+    // If already exists → reuse
+    if (existing?.share_token) {
+      return res.json({
+        shareUrl: `${FRONTEND_URL}/share/${existing.share_token}`,
+      });
+    }
+
+    // Generate new token
+    const token = crypto.randomBytes(24).toString("hex");
+
+    const { error: insertErr } = await db.from("outing_share_links").insert([
+      {
+        outing_id: outingId,
+        share_token: token,
+      },
+    ]);
+
+    if (insertErr) {
+      return res.status(500).json({ error: insertErr.message });
+    }
+
+    // Return new share link
+    res.json({
+      shareUrl: `${FRONTEND_URL}/share/${token}`,
+    });
+  } catch (err) {
+    console.error("Share link error:", err);
+    res.status(500).json({ error: "Failed to generate share link" });
+  }
+});
+
+router.get("/public/share/:token", async (req, res) => {
+  try {
+    const token = req.params.token;
+
+    // Resolve token → outing_id
+    const { data: link, error: linkErr } = await db
+      .from("outing_share_links")
+      .select("outing_id")
+      .eq("share_token", token)
+      .maybeSingle();
+
+    if (linkErr) {
+      return res.status(500).json({ error: linkErr.message });
+    }
+
+    if (!link) {
+      return res.status(404).json({ error: "Invalid share link" });
+    }
+
+    const outingId = link.outing_id;
+
+    // Load outing data
+    const { data: outingRow, error: outingErr } = await db
+      .from("outings")
+      .select("title, location, start_date, end_date")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    if (outingErr) {
+      return res.status(500).json({ error: outingErr.message });
+    }
+
+    // Load finalized plans
+    const { data: plansRow, error: planErr } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (planErr) {
+      return res.status(500).json({ error: planErr.message });
+    }
+
+    if (!outingRow || !plansRow) {
+      return res.status(404).json({ error: "Outing data missing" });
+    }
+
+    const plans =
+      typeof plansRow.plans === "string"
+        ? JSON.parse(plansRow.plans)
+        : plansRow.plans;
+
+    const finalPlan = plans?.plans?.[0];
+
+    // Return read-only public payload
+    res.json({
+      outing: outingRow,
+      plan: finalPlan,
+    });
+  } catch (err) {
+    console.error("Public share error:", err);
+    res.status(500).json({ error: "Failed to load shared outing" });
   }
 });
 
