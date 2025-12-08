@@ -63,7 +63,7 @@ app.use("/api", chatRouter);
 app.use("/api", notificationSettingsRouter);
 
 // Run D-3..D-day outing reminders every day at 9:00
-cron.schedule("0 18 * * *", () => {
+cron.schedule("0 9 * * *", () => {
   runOutingReminderJob().catch((err) =>
     console.error("outing reminder job failed:", err)
   );

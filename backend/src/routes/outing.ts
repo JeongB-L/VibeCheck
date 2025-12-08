@@ -6,6 +6,7 @@ import PDFDocument from "pdfkit";
 import crypto from "crypto";
 import { getNotificationPrefs } from "../utils/notification-prefs";
 import { sendNotificationEmail } from "../utils/emails";
+import { maybeSendSameDayOutingReminder } from "../utils/outing-reminder-immediate";
 
 // --- helpers: robust normalizer for GPT output ---
 type PlanStop = {
@@ -302,6 +303,11 @@ router.post("/outings", async (req, res) => {
 
     console.log("✅ Outing created successfully:", data);
 
+        // 🔔 If this outing is between D-3..D0 and it's after DAILY_SEND_HOUR,
+    // send today's D-X reminder immediately to the creator.
+    maybeSendSameDayOutingReminder(data.id, [String(userId)]).catch((e) =>
+      console.error("Immediate outing reminder after create failed", e)
+    );
 
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
@@ -418,6 +424,17 @@ router.post("/outings/invites/:inviteId/respond", async (req, res) => {
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+
+    // 🔔 If they ACCEPTED, they effectively joined the outing.
+    // If the outing is in D-3..D0 and it's after DAILY_SEND_HOUR,
+    // send today's D-X reminder to this user immediately.
+    if (newStatus === "accepted") {
+      maybeSendSameDayOutingReminder(invite.outing_id, [
+        String(me.user_id),
+      ]).catch((e) =>
+        console.error("Immediate outing reminder after accept failed", e)
+      );
+    }
 
     // Trigger will auto-insert into outing_members if 'accepted'
     res.json({ invite: data });
