@@ -4,6 +4,8 @@ import { publicUrlFromPath } from "../utils/storage";
 import openAI, { OpenAI } from "openai";
 import PDFDocument from "pdfkit";
 import crypto from "crypto";
+import { getNotificationPrefs } from "../utils/notification-prefs";
+import { sendNotificationEmail } from "../utils/emails";
 
 // --- helpers: robust normalizer for GPT output ---
 type PlanStop = {
@@ -299,6 +301,8 @@ router.post("/outings", async (req, res) => {
     }
 
     console.log("✅ Outing created successfully:", data);
+
+
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
   } catch (e: any) {

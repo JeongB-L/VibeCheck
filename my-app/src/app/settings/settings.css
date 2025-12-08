@@ -107,3 +107,24 @@ h1 {
   gap: 1rem;
   flex-wrap: wrap;
 }
+
+/* Each preference row on its own line */
+.pref-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 0;
+  font-size: 0.95rem;
+}
+
+/* Child rows indented */
+.pref-row-child {
+  margin-left: 1.75rem;
+}
+
+/* Error text */
+.settings-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 4px 0 8px;
+}

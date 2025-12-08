@@ -28,6 +28,62 @@
     <p class="muted small" *ngIf="timeoutMinutes() === null">Loading from server…</p>
   </section>
 
+
+    <!-- Notification preferences (Story 42) -->
+  <section class="card">
+    <h2>Notifications</h2>
+    <p class="muted">Choose which email notifications you want for outings and voting.</p>
+
+    <div *ngIf="notifLoading(); else notifContent" class="muted small">
+      Loading…
+    </div>
+
+    <ng-template #notifContent>
+      <div class="pref-group">
+        <label class="pref-row">
+          <input
+            type="checkbox"
+            [checked]="emailEnabled()"
+            (change)="onEmailEnabledChange($event)"
+          />
+          <span>Enable email notifications</span>
+        </label>
+
+        <label class="pref-row pref-row-child">
+          <input
+            type="checkbox"
+            [checked]="outingRemindersEnabled()"
+            [disabled]="!emailEnabled()"
+            (change)="onOutingRemindersChange($event)"
+          />
+          <span>Outing reminders (D-3 to outing day)</span>
+        </label>
+
+        <label class="pref-row pref-row-child">
+          <input
+            type="checkbox"
+            [checked]="votingRemindersEnabled()"
+            [disabled]="!emailEnabled()"
+            (change)="onVotingRemindersChange($event)"
+          />
+          <span>Voting reminders (every 30 minutes until voting ends)</span>
+        </label>
+      </div>
+
+      <p class="settings-error" *ngIf="notifError()">{{ notifError() }}</p>
+
+      <button
+        type="button"
+        class="btn dark"
+        (click)="saveNotificationSettings()"
+        [disabled]="notifSaving()"
+      >
+        {{ notifSaving() ? 'Saving…' : 'Save notification settings' }}
+      </button>
+    </ng-template>
+  </section>
+
+
   <section class="card">
     <h2>Profile History</h2>
     <p class="muted">View and restore previous versions of your profile.</p>

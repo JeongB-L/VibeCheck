@@ -9,6 +9,10 @@ import accountRouter from "./routes/account";
 import preferencesRouter from "./routes/preferences";
 import passwordRouter from "./routes/password-update";
 import chatRouter from "./routes/chat";
+import notificationSettingsRouter from "./routes/notification-settings";
+import cron from "node-cron";
+import { runOutingReminderJob } from "./scheduler/outing-reminders";
+
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -56,6 +60,17 @@ app.use("/api/account", accountRouter);
 app.use("/api", preferencesRouter);
 app.use("/api", passwordRouter);
 app.use("/api", chatRouter);
+app.use("/api", notificationSettingsRouter);
+
+// Run D-3..D-day outing reminders every day at 9:00
+cron.schedule("0 18 * * *", () => {
+  runOutingReminderJob().catch((err) =>
+    console.error("outing reminder job failed:", err)
+  );
+});
+
+
+
 
 // ---- SINGLE app.listen ----
 app.listen(PORT, () => {
