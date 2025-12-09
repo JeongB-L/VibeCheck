@@ -12,7 +12,7 @@ import chatRouter from "./routes/chat";
 import notificationSettingsRouter from "./routes/notification-settings";
 import cron from "node-cron";
 import { runOutingReminderJob } from "./scheduler/outing-reminders";
-
+import { runVotingReminderJob } from "./utils/voting-reminders";
 
 // Load env
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -69,7 +69,11 @@ cron.schedule("0 9 * * *", () => {
   );
 });
 
-
+cron.schedule("*/30 * * * *", () => {
+  runVotingReminderJob().catch((err) =>
+    console.error("voting reminder job failed:", err)
+  );
+});
 
 
 // ---- SINGLE app.listen ----

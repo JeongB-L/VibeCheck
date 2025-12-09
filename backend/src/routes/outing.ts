@@ -311,7 +311,7 @@ router.post("/outings", async (req, res) => {
 
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
-  } catch (e: any) {
+  } catch (e: any) {     
     console.error("❌ POST /api/outings exception:", e);
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
@@ -358,6 +358,7 @@ router.get("/outings/invites", async (req, res) => {
 
     const outingById = new Map((outings || []).map((o) => [o.id, o]));
     const userById = new Map((users || []).map((u: any) => [u.user_id, u]));
+    
 
     const invites = invs.map((i) => {
       const inv = userById.get(i.inviter_id) || {};
@@ -918,6 +919,186 @@ async function getOutingMembers(outingId: number) {
   return { owner, members };
 }
 const VOTE_WINDOW_SECONDS = 3600; // 1 hour
+
+
+// ---------- NEW: helpers for voting participants + emails ----------
+
+// Get all participants (owner + members) used in voting emails
+async function getOutingParticipantsForVoting(
+  outingId: number
+): Promise<{ user_id: string; email: string | null }[]> {
+  const { owner, members } = await getOutingMembers(outingId);
+
+  const result: { user_id: string; email: string | null }[] = [];
+  if (owner && owner.user_id) {
+    result.push({ user_id: String(owner.user_id), email: owner.email || null });
+  }
+  for (const m of members || []) {
+    if (!m.user_id) continue;
+    result.push({ user_id: String(m.user_id), email: m.email || null });
+  }
+
+  const seen = new Set<string>();
+  return result.filter((u) => {
+    if (seen.has(u.user_id)) return false;
+    seen.add(u.user_id);
+    return true;
+  });
+}
+
+/**
+ * Send "voting started" email to all outing participants.
+ * We pass the explicit `deadlineIso` (from voting_ends_at) instead of recomputing.
+ */
+async function sendVotingStartedEmails(
+  outingId: number,
+  deadlineIso: string | null
+) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  for (const p of participants) {
+    if (!p.email) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting started for "${outing.title}"`,
+      text:
+        `Voting has started for the outing "${outing.title}". ` +
+        (deadlineIso
+          ? `Please cast your vote before: ${deadlineIso}.`
+          : `Please cast your vote as soon as possible.`),
+    });
+  }
+}
+
+/**
+ * Send reminder emails (for a single outing) to users who have NOT voted.
+ * Uses outing_plan_votes and respects prefs.
+ */
+async function sendVotingReminderForOuting(
+  outingId: number,
+  deadlineIso: string
+) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  const { data: votes, error: vErr } = await db
+    .from("outing_plan_votes")
+    .select("user_id")
+    .eq("outing_id", outingId);
+
+  if (vErr) {
+    console.error("Voting reminder: failed to load votes", vErr.message);
+    return;
+  }
+
+  const votedSet = new Set<string>(
+    (votes || []).map((v: any) => String(v.user_id))
+  );
+
+  for (const p of participants) {
+    if (!p.email) continue;
+    if (votedSet.has(String(p.user_id))) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting reminder: "${outing.title}"`,
+      text: `You haven’t voted yet for the outing "${outing.title}". Please vote before the deadline: ${deadlineIso}.`,
+    });
+  }
+}
+
+/**
+ * Send "voting ended" email ONCE per outing (per voting window).
+ * Uses outing_plans.voting_end_notified.
+ */
+async function sendVotingEndedEmails(outingId: number) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  for (const p of participants) {
+    if (!p.email) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting ended for "${outing.title}"`,
+      text: `Voting for the outing "${outing.title}" has ended. You can now review the selected plan in VibeCheck.`,
+    });
+  }
+}
+
+/**
+ * CRON-FRIENDLY JOB (run every ~30 minutes):
+ * - For each outing_plans row with a voting window:
+ *   - if window active and not finalized → send reminders to non-voters
+ *   - if ended and not yet notified → send "voting ended" once + mark notified
+ */
+export async function runVotingReminderJob() {
+  try {
+    const nowMs = Date.now();
+
+    const { data: planRows, error } = await db
+      .from("outing_plans")
+      .select(
+        "outing_id, voting_ends_at, voting_finalized_at, voting_end_notified"
+      );
+
+    if (error || !planRows) {
+      console.error("Voting reminder job: query error", error?.message);
+      return;
+    }
+
+    for (const row of planRows as any[]) {
+      const outingId = row.outing_id as number;
+      const deadlineIso = row.voting_ends_at as string | null;
+      const finalizedAt = row.voting_finalized_at as string | null;
+      const alreadyNotified = !!row.voting_end_notified;
+
+      if (!deadlineIso) continue;
+
+      const deadlineMs = new Date(deadlineIso).getTime();
+      if (Number.isNaN(deadlineMs)) continue;
+
+      const ended = nowMs >= deadlineMs || !!finalizedAt;
+
+      // CASE 1: Voting has ended → send "ended" once
+      if (ended) {
+        if (!alreadyNotified) {
+          await sendVotingEndedEmails(outingId);
+          await db
+            .from("outing_plans")
+            .update({ voting_end_notified: true })
+            .eq("outing_id", outingId);
+        }
+        continue; // no reminders once ended
+      }
+
+      // CASE 2: Voting still active → send reminders every time the job runs
+      await sendVotingReminderForOuting(outingId, deadlineIso);
+    }
+  } catch (e: any) {
+    console.error("Voting reminder job failed:", e?.message || e);
+  }
+}
+
+
+
 router.post("/generate-outing", async (req, res) => {
   console.log("=== POST /api/generate-outing START ===");
 
@@ -1171,6 +1352,7 @@ router.post("/generate-outing", async (req, res) => {
           voting_ends_at: votingEndsAt,
           voting_finalized_at: null,
           voting_final_plan_id: null,
+          voting_end_notified: false, // 🔁 reset for new window
         },
 
         // Overwrite if outing_id already exists
@@ -1195,6 +1377,13 @@ router.post("/generate-outing", async (req, res) => {
 
     console.log(" - Generated outing plan saved with ID:", savedPlan.id);
     // 5. Return the generated outing plan to the client
+
+        // 🔔 Voting started: email all participants with deadline
+    sendVotingStartedEmails(outingId, votingEndsAt).catch((e) =>
+      console.error("Voting started emails failed:", e)
+    );
+
+
     res.json({
       success: true,
       plans: generatedPlans.plans,
@@ -1629,12 +1818,18 @@ router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
         voting_ends_at: newEndsIso,
         voting_finalized_at: null,  
         voting_final_plan_id: null,
+        voting_end_notified: false,
       })
       .eq("outing_id", outingId);
 
     if (updErr) {
       return res.status(500).json({ error: updErr.message });
     }
+
+        // 🔔 new window → voting started email
+    sendVotingStartedEmails(outingId, newEndsIso).catch((e) =>
+      console.error("reopen-if-tie: voting started emails failed:", e)
+    );
 
     return res.json({
       ok: true,
@@ -1675,12 +1870,18 @@ router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
       .from("outing_plans")
       .update({
         voting_finalized_at: nowIso,
+        voting_end_notified: true,
       })
       .eq("outing_id", outingId);
 
     if (updErr) {
       return res.status(500).json({ error: updErr.message });
     }
+
+     // 🔔 send "voting ended" immediately
+    sendVotingEndedEmails(outingId).catch((e) =>
+      console.error("close-early: voting ended emails failed:", e)
+    );
 
     return res.json({
       ok: true,
