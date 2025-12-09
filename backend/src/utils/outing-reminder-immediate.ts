@@ -7,10 +7,12 @@ import { sendNotificationEmail } from "./emails";
 const DAILY_SEND_HOUR = 9;
 
 /**
- * Send today's D-3..D0 outing reminder immediately
- * for given users, ONLY IF:
- *  - outing is between D-3 and D-0 (inclusive)
+ * Send an outing reminder immediately for the given users when
+ * an outing is created or they join it, IF:
+ *  - outing is in the future (diffDays >= 0)
  *  - current time is AFTER DAILY_SEND_HOUR
+ *
+ * Works for ALL future outings, not just D-3..D0.
  */
 export async function maybeSendSameDayOutingReminder(
   outingId: number,
@@ -47,9 +49,12 @@ export async function maybeSendSameDayOutingReminder(
         (24 * 60 * 60 * 1000)
     );
 
-    // Only if D-3..D0
-    if (![0, 1, 2, 3].includes(diffDays)) return;
+    // Only for outings that are today or in the future
+    if (diffDays < 0) {
+      return;
+    }
 
+    // General label for ANY future date
     const whenLabel =
       diffDays === 0
         ? "today"
