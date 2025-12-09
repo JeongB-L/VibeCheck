@@ -908,7 +908,10 @@ router.post("/generate-outing", async (req, res) => {
   if (!outingId) {
     return res.status(400).json({ error: "outingId is required" });
   }
-
+  const now = new Date();
+  const votingStartsAt = now.toISOString();
+  const votingEndsAt = new Date(now.getTime() + VOTE_WINDOW_SECONDS * 1000).toISOString();
+  
   const outing = await getOuting(outingId);
   if (!outing) {
     return res.status(404).json({ error: "Outing not found" });
@@ -1147,6 +1150,10 @@ router.post("/generate-outing", async (req, res) => {
           outing_id: outingId,
           plans: JSON.stringify(generatedPlans),
           created_at: new Date().toISOString(),
+          voting_starts_at: votingStartsAt,
+          voting_ends_at: votingEndsAt,
+          voting_finalized_at: null,
+          voting_final_plan_id: null,
         },
 
         // Overwrite if outing_id already exists
@@ -1288,7 +1295,7 @@ router.get("/outings/:id/plan", async (req, res) => {
 
     const { data, error } = await db
       .from("outing_plans")
-      .select("plans, created_at, id, outing_id")
+      .select("plans, created_at, id, outing_id, voting_starts_at, voting_ends_at, voting_finalized_at, voting_final_plan_id")      
       .eq("outing_id", outingId)
       .maybeSingle();
 
@@ -1314,16 +1321,27 @@ router.get("/outings/:id/plan", async (req, res) => {
     let voting_deadline: string | null = null;
     let voting_closed = false;
 
-    if (!isNaN(createdMs)) {
-      const deadlineMs = createdMs + VOTE_WINDOW_SECONDS * 1000;
-      voting_deadline = new Date(deadlineMs).toISOString();
-      voting_closed = Date.now() >= deadlineMs;
+    if (data.voting_starts_at && data.voting_ends_at) {
+      const endMs = new Date(data.voting_ends_at).getTime();
+      voting_deadline = data.voting_ends_at;
+      voting_closed = !!data.voting_finalized_at || Date.now() >= endMs;
+    } else {
+      const createdMs = data.created_at ? new Date(data.created_at).getTime() : NaN;
+      if (!isNaN(createdMs)) {
+        const deadlineMs = createdMs + VOTE_WINDOW_SECONDS * 1000;
+        voting_deadline = new Date(deadlineMs).toISOString();
+        voting_closed = Date.now() >= deadlineMs;
+      }
     }
 
     return res.json({
       plan_id: data.id,
       outing_id: data.outing_id,
       created_at: data.created_at,
+      voting_starts_at: data.voting_starts_at,
+      voting_ends_at: data.voting_ends_at,
+      voting_finalized_at: data.voting_finalized_at,
+      voting_final_plan_id: data.voting_final_plan_id,
       voting_deadline,
       voting_closed,
       ...normalized,
@@ -1583,18 +1601,27 @@ router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
 
     // new voting window
     const nowIso = new Date().toISOString();
+    const newEndsIso = new Date(
+      Date.now() + VOTE_WINDOW_SECONDS * 1000
+    ).toISOString();
+
     const { error: updErr } = await db
       .from("outing_plans")
-      .update({ created_at: nowIso })
+      .update({
+        voting_starts_at: nowIso,  
+        voting_ends_at: newEndsIso,
+        voting_finalized_at: null,  
+        voting_final_plan_id: null,
+      })
       .eq("outing_id", outingId);
 
-    if (updErr) return res.status(500).json({ error: updErr.message });
-
-    const deadlineMs = new Date(nowIso).getTime() + VOTE_WINDOW_SECONDS * 1000;
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
 
     return res.json({
       ok: true,
-      voting_deadline: new Date(deadlineMs).toISOString(),
+      voting_deadline: newEndsIso,
     });
   } catch (e: any) {
     console.error("reopen-if-tie error", e);
@@ -1625,25 +1652,22 @@ router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
       return res.status(403).json({ error: "Not allowed" });
     }
 
-    // make created_at look like the window expired long ago:
-    const nowMs = Date.now();
-    const newCreatedMs = nowMs - VOTE_WINDOW_SECONDS * 1000;
-    const newCreatedIso = new Date(newCreatedMs).toISOString();
+    const nowIso = new Date().toISOString();
 
     const { error: updErr } = await db
       .from("outing_plans")
-      .update({ created_at: newCreatedIso })
+      .update({
+        voting_finalized_at: nowIso,
+      })
       .eq("outing_id", outingId);
 
     if (updErr) {
       return res.status(500).json({ error: updErr.message });
     }
 
-    const deadlineMs = newCreatedMs + VOTE_WINDOW_SECONDS * 1000;
-
     return res.json({
       ok: true,
-      voting_deadline: new Date(deadlineMs).toISOString(), // now
+      voting_finalized_at: nowIso,
       voting_closed: true,
     });
   } catch (e: any) {
@@ -1653,75 +1677,36 @@ router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
 });
 
 router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
-  try {
-    const outingId = Number(req.params.id);
-    const email = String(req.body?.email || "");
+  const outingId = Number(req.params.id);
 
-    if (!outingId || !Number.isInteger(outingId)) {
-      return res.status(400).json({ error: "Invalid outing id" });
-    }
-    if (!email) {
-      return res.status(400).json({ error: "email is required" });
-    }
+  const { data: planRow, error } = await db
+    .from("outing_plans")
+    .select("voting_ends_at")
+    .eq("outing_id", outingId)
+    .single();
 
-    const me = await getUserByEmail(email);
-    const outing = await getOuting(outingId);
-    if (!outing) {
-      return res.status(404).json({ error: "Outing not found" });
-    }
-
-    // only creator or admin can extend voting
-    if (!(await isAdminOrCreator(outingId, me.user_id))) {
-      return res.status(403).json({ error: "Not allowed" });
-    }
-
-    const { data: planRow, error: planErr } = await db
-      .from("outing_plans")
-      .select("created_at")
-      .eq("outing_id", outingId)
-      .maybeSingle();
-
-    if (planErr) return res.status(500).json({ error: planErr.message });
-    if (!planRow) {
-      return res.status(404).json({ error: "No saved plans for this outing" });
-    }
-
-    const oldCreatedMs = planRow.created_at
-      ? new Date(planRow.created_at).getTime()
-      : NaN;
-    if (isNaN(oldCreatedMs)) {
-      return res.status(500).json({ error: "Invalid plan timestamp" });
-    }
-
-    const currentDeadlineMs = oldCreatedMs + VOTE_WINDOW_SECONDS * 1000;
-
-    // do NOT allow extending if voting already ended
-    if (Date.now() >= currentDeadlineMs) {
-      return res.status(400).json({ error: "Voting has already ended" });
-    }
-
-    const extendMs = 30 * 60 * 1000; // 30 minutes
-    const newCreatedMs = oldCreatedMs + extendMs;
-    const newCreatedIso = new Date(newCreatedMs).toISOString();
-    const { error: updErr } = await db
-      .from("outing_plans")
-      .update({ created_at: newCreatedIso })
-      .eq("outing_id", outingId);
-
-    if (updErr) return res.status(500).json({ error: updErr.message });
-
-    const newDeadlineMs = newCreatedMs + VOTE_WINDOW_SECONDS * 1000;
-
-    return res.json({
-      ok: true,
-      voting_deadline: new Date(newDeadlineMs).toISOString(),
-      voting_closed: Date.now() >= newDeadlineMs,
-    });
-  } catch (e: any) {
-    console.error("extend-30 error", e);
-    return res.status(500).json({ error: e?.message || "Server error" });
+  if (error || !planRow?.voting_ends_at) {
+    return res.status(400).json({ error: "Voting end time not found" });
   }
+
+  const currentEndMs = new Date(planRow.voting_ends_at).getTime();
+  if (Date.now() >= currentEndMs) {
+    return res.status(400).json({ error: "Voting already ended" });
+  }
+
+  const newEndIso = new Date(currentEndMs + 30 * 60 * 1000).toISOString();
+
+  await db
+    .from("outing_plans")
+    .update({ voting_ends_at: newEndIso })
+    .eq("outing_id", outingId);
+
+  return res.json({
+    ok: true,
+    voting_deadline: newEndIso,
+  });
 });
+
 
 router.get("/outings/:id/final-plan-pdf", async (req, res) => {
   try {
@@ -2007,6 +1992,54 @@ router.get("/public/share/:token", async (req, res) => {
   } catch (err) {
     console.error("Public share error:", err);
     res.status(500).json({ error: "Failed to load shared outing" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/finalize", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+    const winningIndex = Number(req.body?.planIndex);
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+    if (!Number.isInteger(winningIndex) || winningIndex < 0 || winningIndex > 2) {
+      return res.status(400).json({ error: "planIndex must be 0, 1 or 2" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // only creator or admin can finalize
+    if (!(await isAdminOrCreator(outingId, me.user_id))) {
+      return res.status(403).json({ error: "Not allowed to finalize voting" });
+    }
+
+ const nowIso = new Date().toISOString();
+
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({
+        voting_finalized_at: nowIso,
+        voting_final_plan_id: winningIndex, // or plan.planId if you prefer
+      })
+      .eq("outing_id", outingId);
+
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
+
+    return res.json({ ok: true, voting_finalized_at: nowIso, voting_final_plan_id: winningIndex });
+  } catch (e: any) {
+    console.error("finalize voting error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
 

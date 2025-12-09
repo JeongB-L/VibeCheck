@@ -260,17 +260,19 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.detectChanges();
 
       // voting window info from backend
-      const votingDeadlineIso = body.voting_deadline as string | null;
+      const votingEndsAt = body.voting_ends_at as string | null;
       this.votingClosed = !!body.voting_closed;
 
-      if (votingDeadlineIso && !this.votingClosed) {
-        const deadlineMs = new Date(votingDeadlineIso).getTime();
+      if (votingEndsAt && !this.votingClosed) {
+        const deadlineMs = new Date(votingEndsAt).getTime();
         const nowMs = Date.now();
         const secondsLeft = Math.floor((deadlineMs - nowMs) / 1000);
+
         this.startVoteTimer(secondsLeft);
       } else {
         this.voteTimerActive = false;
         this.voteTimerSeconds = 0;
+
         if (this.votingClosed) {
           this.computeWinningPlan(); // compute winner immediately
         }
@@ -1037,6 +1039,8 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
     this.winnerPlanTitle = plans[idx].title || `Plan ${idx + 1}`;
     this.activePlanIdx.set(idx);
     this.cdr.detectChanges();
+    this.finalizeVotingOnServer(idx);
+
   }
   async loadPlanVotes() {
     const o = this.outing();
@@ -1216,4 +1220,31 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
       this.shareLoading.set(false);
     }
   }
+
+  private async finalizeVotingOnServer(planIndex: number) {
+    const outing = this.outing();
+    const email = this.userEmail;
+    if (!outing || !email) return;
+
+    try {
+      const res = await fetch(`${API}/api/outings/${outing.id}/plan-voting/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, planIndex }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn('Failed to finalize voting:', body?.error || res.status);
+        return;
+      }
+
+      // optional: update local state from response if you want
+      this.voteMessage = 'Voting finalized.';
+    } catch (err) {
+      console.error('finalizeVotingOnServer error', err);
+    }
+  }
 }
+
+
