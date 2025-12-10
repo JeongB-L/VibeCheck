@@ -1040,7 +1040,6 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
     this.activePlanIdx.set(idx);
     this.cdr.detectChanges();
     this.finalizeVotingOnServer(idx);
-
   }
   async loadPlanVotes() {
     const o = this.outing();
@@ -1245,6 +1244,53 @@ export class OutingDetail implements OnInit, AfterViewInit, OnDestroy {
       console.error('finalizeVotingOnServer error', err);
     }
   }
+
+  outingFinalized(): boolean {
+    return this.votingClosed && this.winnerPlanIndex !== null;
+  }
+
+  public async exportFinalizedOuting() {
+    console.log('Exporting finalized outing...');
+    const outingId = this.outing()?.id;
+    if (!outingId) {
+      this.toast.error('Outing not loaded, cannot export.');
+      return;
+    }
+
+    try {
+      // 1. Request the ICS file from the backend
+      const res = await fetch(`${API}/api/outings/${outingId}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outingId }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to export plan.');
+      }
+
+      // 2. Convert response to Blob
+      const blob = await res.blob();
+
+      // 3. Create a temporary link to trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      // Name the file
+      a.download = `VibeCheck_Plan_${outingId}.ics`;
+      document.body.appendChild(a);
+      a.click();
+
+      // 4. Cleanup
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      this.toast.success('Calendar file downloaded!');
+    } catch (err: any) {
+      console.error(err);
+      this.toast.error(err.message || 'Failed to export finalized outing.');
+    }
+  }
 }
-
-
