@@ -303,7 +303,7 @@ router.post("/outings", async (req, res) => {
 
     console.log("✅ Outing created successfully:", data);
 
-        // 🔔 If this outing is between D-3..D0 and it's after DAILY_SEND_HOUR,
+    // 🔔 If this outing is between D-3..D0 and it's after DAILY_SEND_HOUR,
     // send today's D-X reminder immediately to the creator.
     maybeSendSameDayOutingReminder(data.id, [String(userId)]).catch((e) =>
       console.error("Immediate outing reminder after create failed", e)
@@ -311,7 +311,7 @@ router.post("/outings", async (req, res) => {
 
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
-  } catch (e: any) {     
+  } catch (e: any) {
     console.error("❌ POST /api/outings exception:", e);
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
@@ -358,7 +358,6 @@ router.get("/outings/invites", async (req, res) => {
 
     const outingById = new Map((outings || []).map((o) => [o.id, o]));
     const userById = new Map((users || []).map((u: any) => [u.user_id, u]));
-    
 
     const invites = invs.map((i) => {
       const inv = userById.get(i.inviter_id) || {};
@@ -920,7 +919,6 @@ async function getOutingMembers(outingId: number) {
 }
 const VOTE_WINDOW_SECONDS = 3600; // 1 hour
 
-
 // ---------- NEW: helpers for voting participants + emails ----------
 
 // Get all participants (owner + members) used in voting emails
@@ -1097,8 +1095,6 @@ export async function runVotingReminderJob() {
   }
 }
 
-
-
 router.post("/generate-outing", async (req, res) => {
   console.log("=== POST /api/generate-outing START ===");
 
@@ -1108,8 +1104,10 @@ router.post("/generate-outing", async (req, res) => {
   }
   const now = new Date();
   const votingStartsAt = now.toISOString();
-  const votingEndsAt = new Date(now.getTime() + VOTE_WINDOW_SECONDS * 1000).toISOString();
-  
+  const votingEndsAt = new Date(
+    now.getTime() + VOTE_WINDOW_SECONDS * 1000
+  ).toISOString();
+
   const outing = await getOuting(outingId);
   if (!outing) {
     return res.status(404).json({ error: "Outing not found" });
@@ -1378,11 +1376,10 @@ router.post("/generate-outing", async (req, res) => {
     console.log(" - Generated outing plan saved with ID:", savedPlan.id);
     // 5. Return the generated outing plan to the client
 
-        // 🔔 Voting started: email all participants with deadline
+    // 🔔 Voting started: email all participants with deadline
     sendVotingStartedEmails(outingId, votingEndsAt).catch((e) =>
       console.error("Voting started emails failed:", e)
     );
-
 
     res.json({
       success: true,
@@ -1501,7 +1498,9 @@ router.get("/outings/:id/plan", async (req, res) => {
 
     const { data, error } = await db
       .from("outing_plans")
-      .select("plans, created_at, id, outing_id, voting_starts_at, voting_ends_at, voting_finalized_at, voting_final_plan_id")      
+      .select(
+        "plans, created_at, id, outing_id, voting_starts_at, voting_ends_at, voting_finalized_at, voting_final_plan_id"
+      )
       .eq("outing_id", outingId)
       .maybeSingle();
 
@@ -1532,7 +1531,9 @@ router.get("/outings/:id/plan", async (req, res) => {
       voting_deadline = data.voting_ends_at;
       voting_closed = !!data.voting_finalized_at || Date.now() >= endMs;
     } else {
-      const createdMs = data.created_at ? new Date(data.created_at).getTime() : NaN;
+      const createdMs = data.created_at
+        ? new Date(data.created_at).getTime()
+        : NaN;
       if (!isNaN(createdMs)) {
         const deadlineMs = createdMs + VOTE_WINDOW_SECONDS * 1000;
         voting_deadline = new Date(deadlineMs).toISOString();
@@ -1814,9 +1815,9 @@ router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
     const { error: updErr } = await db
       .from("outing_plans")
       .update({
-        voting_starts_at: nowIso,  
+        voting_starts_at: nowIso,
         voting_ends_at: newEndsIso,
-        voting_finalized_at: null,  
+        voting_finalized_at: null,
         voting_final_plan_id: null,
         voting_end_notified: false,
       })
@@ -1826,7 +1827,7 @@ router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
       return res.status(500).json({ error: updErr.message });
     }
 
-        // 🔔 new window → voting started email
+    // 🔔 new window → voting started email
     sendVotingStartedEmails(outingId, newEndsIso).catch((e) =>
       console.error("reopen-if-tie: voting started emails failed:", e)
     );
@@ -1878,7 +1879,7 @@ router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
       return res.status(500).json({ error: updErr.message });
     }
 
-     // 🔔 send "voting ended" immediately
+    // 🔔 send "voting ended" immediately
     sendVotingEndedEmails(outingId).catch((e) =>
       console.error("close-early: voting ended emails failed:", e)
     );
@@ -1924,7 +1925,6 @@ router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
     voting_deadline: newEndIso,
   });
 });
-
 
 router.get("/outings/:id/final-plan-pdf", async (req, res) => {
   try {
@@ -2225,7 +2225,11 @@ router.post("/outings/:id/plan-voting/finalize", async (req, res) => {
     if (!email) {
       return res.status(400).json({ error: "email is required" });
     }
-    if (!Number.isInteger(winningIndex) || winningIndex < 0 || winningIndex > 2) {
+    if (
+      !Number.isInteger(winningIndex) ||
+      winningIndex < 0 ||
+      winningIndex > 2
+    ) {
       return res.status(400).json({ error: "planIndex must be 0, 1 or 2" });
     }
 
@@ -2240,7 +2244,7 @@ router.post("/outings/:id/plan-voting/finalize", async (req, res) => {
       return res.status(403).json({ error: "Not allowed to finalize voting" });
     }
 
- const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString();
 
     const { error: updErr } = await db
       .from("outing_plans")
@@ -2254,9 +2258,173 @@ router.post("/outings/:id/plan-voting/finalize", async (req, res) => {
       return res.status(500).json({ error: updErr.message });
     }
 
-    return res.json({ ok: true, voting_finalized_at: nowIso, voting_final_plan_id: winningIndex });
+    return res.json({
+      ok: true,
+      voting_finalized_at: nowIso,
+      voting_final_plan_id: winningIndex,
+    });
   } catch (e: any) {
     console.error("finalize voting error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+// Helper to parse "9:00 AM - 12:00 PM" into ICS date/time strings
+function parseTimeRange(dateStr: string, timeStr: string) {
+  try {
+    if (!timeStr || !dateStr) return null;
+
+    // Normalize input
+    const clean = timeStr.toLowerCase().replace(/\./g, "").trim();
+
+    // Regex matches: "9:00 am - 5:00 pm" or "9 am - 5 pm"
+    // Groups: 1=StartHour, 2=StartMin, 3=StartAmPm, 4=EndHour, 5=EndMin, 6=EndAmPm
+    const regex =
+      /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i;
+    const match = clean.match(regex);
+
+    if (!match) return null;
+
+    let [_, sH, sM, sMeridiem, eH, eM, eMeridiem] = match;
+
+    // Helper to convert 12h to 24h format
+    const to24h = (h: string, m: string, meridiem: string) => {
+      let hour = parseInt(h, 10);
+      const min = m ? parseInt(m, 10) : 0;
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      if (meridiem === "am" && hour === 12) hour = 0;
+      return { hour, min };
+    };
+
+    // If end meridiem exists but start doesn't (e.g. "9 - 11 AM"), assume start matches end
+    if (eMeridiem && !sMeridiem) sMeridiem = eMeridiem;
+
+    const start = to24h(sH, sM, sMeridiem);
+    const end = to24h(eH, eM, eMeridiem);
+
+    // Format to YYYYMMDDTHHMMSS (Floating time - no 'Z', uses user's calendar timezone)
+    const format = (h: number, m: number) => {
+      const hh = h.toString().padStart(2, "0");
+      const mm = m.toString().padStart(2, "0");
+      return `${dateStr.replace(/-/g, "")}T${hh}${mm}00`;
+    };
+
+    return {
+      start: format(start.hour, start.min),
+      end: format(end.hour, end.min),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+router.post("/outings/:id/export", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    // 1. Fetch Plan
+    const { data: planRow, error: planErr } = await db
+      .from("outing_plans")
+      .select("plans, voting_final_plan_id")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (planErr || !planRow || planRow.voting_final_plan_id === null) {
+      return res.status(400).json({ error: "Finalized plan not found." });
+    }
+
+    const { data: outingRow } = await db
+      .from("outings")
+      .select("title, location")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    // 2. Extract Winning Plan
+    const rawPlans =
+      typeof planRow.plans === "string"
+        ? JSON.parse(planRow.plans)
+        : planRow.plans;
+    const finalPlan = rawPlans?.plans?.[planRow.voting_final_plan_id];
+
+    if (!finalPlan)
+      return res.status(404).json({ error: "Plan data missing." });
+
+    // 3. Prepare ICS Header
+    const now =
+      new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    let icsContent =
+      [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//VibeCheck//Outing Plan//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+      ].join("\r\n") + "\r\n";
+
+    // 4. Loop Days
+    if (finalPlan.itinerary && Array.isArray(finalPlan.itinerary)) {
+      finalPlan.itinerary.forEach((day: any, dIndex: number) => {
+        if (!day.date) return;
+        const safeDate = day.date.replace(/-/g, "");
+
+        // --- A. Create "Daily Summary" (All Day Event) ---
+        let dailyDesc = `Daily Overview:\n`;
+        if (day.timeline) {
+          day.timeline.forEach((s: any) => {
+            dailyDesc += `• ${s.time || "TBD"}: ${s.name || "Activity"}\n`;
+          });
+        }
+
+        icsContent +=
+          [
+            "BEGIN:VEVENT",
+            `UID:vibecheck-${outingId}-day-${dIndex}-${now}`,
+            `DTSTAMP:${now}`,
+            `DTSTART;VALUE=DATE:${safeDate}`,
+            `SUMMARY:📅 ${outingRow?.title || "Trip"} - Day ${dIndex + 1}`,
+            `DESCRIPTION:${dailyDesc}`,
+            `LOCATION:${outingRow?.location || ""}`,
+            "END:VEVENT",
+          ].join("\r\n") + "\r\n";
+
+        // --- B. Create Individual Events (if time is parseable) ---
+        if (day.timeline && Array.isArray(day.timeline)) {
+          day.timeline.forEach((stop: any, sIndex: number) => {
+            const timeRange = parseTimeRange(day.date, stop.time);
+
+            if (timeRange) {
+              // We successfully parsed the time! Create a specific event.
+              icsContent +=
+                [
+                  "BEGIN:VEVENT",
+                  `UID:vibecheck-${outingId}-stop-${dIndex}-${sIndex}-${now}`,
+                  `DTSTAMP:${now}`,
+                  `DTSTART:${timeRange.start}`,
+                  `DTEND:${timeRange.end}`,
+                  `SUMMARY:${stop.name || "Activity"}`,
+                  `DESCRIPTION:${stop.description || ""} (Cost: ${
+                    stop.cost_estimate || "N/A"
+                  })`,
+                  `LOCATION:${stop.address || ""}`,
+                  "END:VEVENT",
+                ].join("\r\n") + "\r\n";
+            }
+          });
+        }
+      });
+    }
+
+    icsContent += "END:VCALENDAR";
+
+    const filename = `VibeCheck_Plan_${outingId}.ics`;
+    res.setHeader("Content-Type", "text/calendar");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(icsContent);
+  } catch (e: any) {
+    console.error("Export ICS Error:", e);
     return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
