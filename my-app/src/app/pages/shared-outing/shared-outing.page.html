@@ -1,0 +1,56 @@
+<div class="pdf-wrapper" *ngIf="outing() && plan()">
+  <!-- COVER -->
+  <div class="cover">
+    <h1>VibeCheck Itinerary</h1>
+
+    <h2>{{ plan().title || outing().title }}</h2>
+
+    <p class="date">{{ outing().start_date }} – {{ outing().end_date }}</p>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="section" *ngIf="plan().overview">
+    <h3>Overview</h3>
+    <p>{{ plan().overview }}</p>
+  </div>
+
+  <!-- HIGHLIGHTS -->
+  <div class="section">
+    <p><strong>Budget:</strong> {{ plan().total_budget_estimate || '—' }}</p>
+    <p><strong>Avg Fairness Score:</strong> {{ plan().avgFairnessIndex ?? '—' }}%</p>
+
+    <p *ngIf="plan().badge?.length"><strong>Badges:</strong> {{ plan().badge.join(' • ') }}</p>
+  </div>
+
+  <!-- ITINERARY -->
+  <div class="section">
+    <h3>Daily Itinerary</h3>
+
+    <div *ngFor="let day of plan().itinerary">
+      <h4 class="day-title">{{ day.date }}</h4>
+
+      <div *ngFor="let stop of day.timeline" class="stop">
+        <div class="stop-title">{{ stop.time }} — {{ stop.name }}</div>
+
+        <div *ngIf="stop.address"><strong>Address:</strong> {{ stop.address }}</div>
+
+        <div *ngIf="stop.description"><strong>Notes:</strong> {{ stop.description }}</div>
+
+        <div *ngIf="stop.cost_estimate"><strong>Cost:</strong> {{ stop.cost_estimate }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="section" *ngIf="plan().summary?.text">
+    <h3>AI Summary</h3>
+    <p>{{ plan().summary.text }}</p>
+  </div>
+</div>
+
+<!-- ERROR -->
+<div *ngIf="error()" class="error">
+  {{ error() }}
+</div>
+
+<div *ngIf="loading()" class="loading">Loading itinerary…</div>

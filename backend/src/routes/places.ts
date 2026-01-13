@@ -276,5 +276,61 @@ router.get("/recommend", async (req, res) => {
 });
 
 
+router.get("/cover", async (req, res) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    const w = Math.min(Number(req.query.w ?? 900), 1600);
+    const h = Math.min(Number(req.query.h ?? 400), 1600);
+    if (!q) return res.status(400).send("missing q");
+
+    // 1) Find a place that has photos (Text Search works well for city names)
+    const search = await fetch(`${BASE}/places:searchText`, {
+      method: "POST",
+      headers: headers("places.id,places.photos.name"),
+      body: JSON.stringify({
+        textQuery: q,
+        languageCode: "en",
+        includedType: "locality", // bias to cities; remove if you want broader
+      }),
+    });
+
+    if (!search.ok) {
+      const txt = await search.text();
+      console.error("searchText error", search.status, txt);
+      return res.status(502).send("searchText failed");
+    }
+
+    const sData = (await search.json()) as {
+      places?: Array<{ id?: string; photos?: Array<{ name?: string }> }>;
+    };
+
+    const photoName =
+      sData.places?.find((p) => p.photos?.[0]?.name)?.photos?.[0]?.name ?? null;
+
+
+      console.log(photoName)
+      console.log()
+    if (!photoName) return res.status(204).end(); // no photo → let client fallback
+
+    // 2) Render the photo with the NEW API (…/media?key=…)
+   const mediaUrl = `${BASE}/${encodeURI(photoName)}/media?maxWidthPx=${w}&maxHeightPx=${h}&key=${API_KEY}`;
+    console.log(mediaUrl)
+
+    const imgRes = await fetch(mediaUrl);
+    if (!imgRes.ok) {
+      const txt = await imgRes.text();
+      console.error("photo media error", imgRes.status, txt);
+      return res.status(502).send("photo fetch failed");
+    }
+
+    res.set("Content-Type", imgRes.headers.get("content-type") || "image/jpeg");
+    res.set("Cache-Control", "public, max-age=86400"); // 1 day cache
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    return res.end(buf);
+  } catch (err: any) {
+    console.error("cover route error", err?.message || err);
+    return res.status(500).send("server error");
+  }
+});
 
 export default router;

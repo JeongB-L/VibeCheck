@@ -1,0 +1,73 @@
+<app-header [showOutings]="true"></app-header>
+
+<main class="chat-wrap" aria-label="Chat">
+  <!-- Slim page header -->
+  <header class="chat-top">
+    <div class="peer">
+      <div class="peer-texts">
+        <h1 class="peer-name">
+          {{ friendEmail() || 'Direct Message' }}
+        </h1>
+        <div class="peer-sub">1:1 conversation</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- status -->
+  <div *ngIf="loading()" class="muted center">Connecting…</div>
+  <div *ngIf="error()" class="alert center">{{ error() }}</div>
+
+  <!-- Messages -->
+  <section class="chat-scroller" #scroller *ngIf="!error()">
+    <ul class="msg-list">
+      <li
+        class="message-row"
+        *ngFor="let m of messages(); trackBy: trackById"
+        [class.me]="m.sender_id === meUserId"
+      >
+        <div class="bubble">
+          <!-- Sender header with avatar + name + time -->
+          <div class="msg-header">
+            <img
+              class="msg-ava"
+              [src]="m.sender?.avatar_url || 'assets/default_pfp.jpg'"
+              alt=""
+              (error)="onPeerImgError($event)"
+            />
+            <div class="msg-header-texts">
+              <div class="msg-name">
+                {{
+                  m.sender_id === meUserId
+                    ? 'You'
+                    : m.sender?.display_name || m.sender?.name || m.sender?.email || 'Unknown'
+                }}
+              </div>
+              <div class="msg-time">
+                {{ m.created_at | date : 'short' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Message body -->
+          <div class="bubble-body">
+            {{ m.body }}
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Composer -->
+  <footer class="composer">
+    <input
+      class="composer-input"
+      type="text"
+      placeholder="Type a message…"
+      [value]="draft()"
+      (input)="draft.set($any($event.target).value || '')"
+      (keydown.enter)="send()"
+      aria-label="Message input"
+    />
+    <button class="send-btn" (click)="send()" [disabled]="!draft().trim()">Send</button>
+  </footer>
+</main>

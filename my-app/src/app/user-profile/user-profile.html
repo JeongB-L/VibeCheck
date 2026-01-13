@@ -1,0 +1,62 @@
+<app-header [showOutings]="true"></app-header>
+
+<main *ngIf="!loading(); else spinner" class="page">
+  <section *ngIf="error(); else content" class="alert">{{ error() }}</section>
+
+  <ng-template #content>
+    <!-- Top: User identity (read-only) -->
+    <section class="card signed-as">
+      <div class="top-row">
+        <span class="muted">Profile</span>
+        <span class="name">{{ titleName() }}</span>
+      </div>
+      <div class="email-row" *ngIf="email()">
+        <span class="email">{{ email() }}</span>
+      </div>
+    </section>
+
+    <!-- Bottom: Two columns -->
+    <section class="card two-col" *ngIf="prof() as p">
+      <!-- Left: Avatar (no upload/change) -->
+      <div class="col left">
+        <div class="avatar-wrap">
+          <img
+            [src]="avatarSrc()"
+            class="avatar-xl"
+            alt="User avatar"
+            (error)="onImgError($event)"
+          />
+        </div>
+      </div>
+
+      <!-- Right: About + Preferences (read-only) -->
+      <div class="col right">
+        <div class="about-header">
+          <h2>About</h2>
+          <!-- no Edit button -->
+        </div>
+
+        <div class="desc-box">
+          <p *ngIf="p.bio; else emptyBio" class="desc">{{ p.bio }}</p>
+          <ng-template #emptyBio>
+            <p class="empty-text">Nothing here yet.</p>
+          </ng-template>
+        </div>
+
+        <h2 class="mt-pref">Preferences</h2>
+        <div class="prefs-box">
+          <div *ngIf="p.preferences?.length; else noPrefs" class="chips">
+            <span class="chip" *ngFor="let k of p.preferences">{{ k }}</span>
+          </div>
+          <ng-template #noPrefs>
+            <div class="empty-text">No preferences listed.</div>
+          </ng-template>
+        </div>
+      </div>
+    </section>
+  </ng-template>
+</main>
+
+<ng-template #spinner>
+  <div class="page muted">Loading…</div>
+</ng-template>

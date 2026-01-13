@@ -29,6 +29,15 @@ export class SettingsPage implements OnInit {
     return Number.isFinite(v) && v > 0 && v <= 720;
   });
 
+  // -------- Notification preferences (Story 42) ----------
+  notifLoading = signal(false);
+  notifSaving = signal(false);
+  emailEnabled = signal(true);              // master email toggle
+  outingRemindersEnabled = signal(true);    // Story 41
+  votingRemindersEnabled = signal(true);    // Story 44
+  notifError = signal<string | null>(null);
+
+
   constructor(private router: Router, private inactivity: InactivityService) {}
 
   ngOnInit() {
@@ -93,6 +102,111 @@ export class SettingsPage implements OnInit {
     this.timeoutMinutes.set(v);
     this.inputStr.set(String(v));
     this.inactivity.setTimeoutMinutes(v);
+  }
+
+
+    // ---------- notification settings (Story 42) ----------
+  private async loadNotificationSettings() {
+    this.notifLoading.set(true);
+    this.notifError.set(null);
+
+    try {
+      if (!this.userEmail) {
+        return;
+      }
+
+      const res = await fetch(
+        `http://localhost:3001/api/notification-settings?email=${encodeURIComponent(
+          this.userEmail
+        )}`
+      );
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        this.notifError.set(
+          body?.error || 'Failed to load notification settings.'
+        );
+        return;
+      }
+
+      if (typeof body.email_enabled === 'boolean') {
+        this.emailEnabled.set(body.email_enabled);
+      }
+      if (typeof body.outing_reminders_enabled === 'boolean') {
+        this.outingRemindersEnabled.set(body.outing_reminders_enabled);
+      }
+      if (typeof body.voting_reminders_enabled === 'boolean') {
+        this.votingRemindersEnabled.set(body.voting_reminders_enabled);
+      }
+    } catch (e: any) {
+      this.notifError.set(e?.message ?? 'Failed to load notification settings.');
+    } finally {
+      this.notifLoading.set(false);
+    }
+  }
+
+  onEmailEnabledChange(ev: Event) {
+    const target = ev.target as HTMLInputElement;
+    this.emailEnabled.set(target.checked);
+  }
+
+  onOutingRemindersChange(ev: Event) {
+    const target = ev.target as HTMLInputElement;
+    this.outingRemindersEnabled.set(target.checked);
+  }
+
+  onVotingRemindersChange(ev: Event) {
+    const target = ev.target as HTMLInputElement;
+    this.votingRemindersEnabled.set(target.checked);
+  }
+
+  async saveNotificationSettings() {
+    if (!this.userEmail) {
+      alert('You must be signed in to update notification settings.');
+      return;
+    }
+
+    this.notifSaving.set(true);
+    this.notifError.set(null);
+
+    try {
+      const res = await fetch(
+        'http://localhost:3001/api/notification-settings',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: this.userEmail,
+            emailEnabled: this.emailEnabled(),
+            outingRemindersEnabled: this.outingRemindersEnabled(),
+            votingRemindersEnabled: this.votingRemindersEnabled(),
+          }),
+        }
+      );
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        this.notifError.set(
+          body?.error || 'Failed to save notification settings.'
+        );
+        return;
+      }
+
+      // sync with server response, just in case
+      if (typeof body.email_enabled === 'boolean') {
+        this.emailEnabled.set(body.email_enabled);
+      }
+      if (typeof body.outing_reminders_enabled === 'boolean') {
+        this.outingRemindersEnabled.set(body.outing_reminders_enabled);
+      }
+      if (typeof body.voting_reminders_enabled === 'boolean') {
+        this.votingRemindersEnabled.set(body.voting_reminders_enabled);
+      }
+    } catch (e: any) {
+      this.notifError.set(e?.message ?? 'Failed to save notification settings.');
+    } finally {
+      this.notifSaving.set(false);
+    }
   }
 
   // header actions

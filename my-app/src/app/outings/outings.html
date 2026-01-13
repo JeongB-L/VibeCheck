@@ -19,12 +19,7 @@
   <!-- Right-side sheet -->
   <div class="sheet-backdrop" *ngIf="showForm" (click)="toggleForm()"></div>
 
-  <form
-    class="sheet"
-    *ngIf="showForm"
-    (ngSubmit)="createOuting()"
-    (click)="$event.stopPropagation()"
-  >
+  <form class="sheet" *ngIf="showForm" (ngSubmit)="createOuting()" (click)="$event.stopPropagation()">
     <div class="sheet-header">
       <h2>Create a outing</h2>
       <button type="button" class="sheet-close" (click)="toggleForm()">✕</button>
@@ -34,15 +29,8 @@
       <!-- Outing name -->
       <div class="field">
         <label for="title">Outing name</label>
-        <input
-          id="title"
-          type="text"
-          [(ngModel)]="title"
-          name="title"
-          maxlength="80"
-          required
-          placeholder="e.g., Hangout in Chicago"
-        />
+        <input id="title" type="text" [(ngModel)]="title" name="title" maxlength="80" required
+          placeholder="e.g., Hangout in Chicago" />
         <span class="hint">{{ title.length || 0 }}/80 max characters</span>
       </div>
 
@@ -51,19 +39,9 @@
         <label for="location">Destination</label>
 
         <div class="loc-input-wrap">
-          <input
-            id="location"
-            type="text"
-            [class.invalid]="locTouched && !selectedPlace"
-            [value]="location"
-            (input)="onLocationInput($any($event.target).value)"
-            (focus)="onLocFocus()"
-            (blur)="onLocBlur()"
-            (keydown)="onLocKeydown($event)"
-            placeholder="Where to?"
-            autocomplete="off"
-            required
-          />
+          <input id="location" type="text" [class.invalid]="locTouched && !selectedPlace" [value]="location"
+            (input)="onLocationInput($any($event.target).value)" (focus)="onLocFocus()" (blur)="onLocBlur()"
+            (keydown)="onLocKeydown($event)" placeholder="Where to?" autocomplete="off" required />
         </div>
 
         <div class="loc-dropdown" *ngIf="locOpen">
@@ -102,14 +80,38 @@
     </div>
   </form>
 
+  <!-- Pending invites panel -->
+  <section class="invites" *ngIf="invitesLoading || pendingInvites.length">
+    <h3 class="invites-title">Pending invites</h3>
+
+    <div *ngIf="invitesLoading" class="invite-row">Loading…</div>
+
+    <div class="invite-row" *ngFor="let iv of pendingInvites">
+      <img class="friend-ava" [src]="avatarUrl(iv.inviter)" (error)="onImgError($event)" />
+
+      <div class="invite-info">
+        <div class="line1">
+          <strong>{{ iv.inviter.display_name || iv.inviter.name || iv.inviter.email }}</strong>
+          invited you to
+          <strong>{{ iv.outing?.title || 'an outing' }}</strong>
+        </div>
+        <div class="line2">
+          <span *ngIf="iv.outing">
+            {{ iv.outing.start_date }} → {{ iv.outing.end_date }} · {{ iv.outing.location }}
+          </span>
+        </div>
+      </div>
+
+      <div class="invite-actions">
+        <button class="accept" (click)="respondInvite(iv.id, 'accept')">Accept</button>
+        <button class="decline" (click)="respondInvite(iv.id, 'decline')">Decline</button>
+      </div>
+    </div>
+  </section>
+
+
   <div class="list">
-    <article
-      class="card"
-      *ngFor="let o of outings"
-      (click)="goDetail(o.id)"
-      role="button"
-      tabindex="0"
-    >
+    <article class="card" *ngFor="let o of outings" (click)="goDetail(o.id)" role="button" tabindex="0">
       <div class="thumb">
         <img [src]="coverSrc(o)" (error)="coverFallback($event, o.id)" alt="" />
       </div>
@@ -118,12 +120,13 @@
         <div class="title-row">
           <h3>{{ o.title }}</h3>
 
+        
           <div class="menu-wrap">
             <button class="icon-btn kebab" (click)="toggleMenu(o.id); $event.stopPropagation()">
               ⋯
             </button>
             <div class="menu" *ngIf="menuForId === o.id" (click)="$event.stopPropagation()">
-              <button class="menu-item">Invite</button>
+              <button class="menu-item" (click)="openInviteModal(o, $event)">Invite</button>
               <button class="menu-item" disabled>Share trip</button>
               <button class="menu-item" disabled>Make trip public</button>
               <button class="menu-item" disabled>Mark trip as completed</button>
@@ -133,37 +136,61 @@
               </button>
             </div>
           </div>
+
+          
         </div>
 
         <div class="meta">
-          <span class="meta-chip"
-            ><i class="fa-regular fa-calendar"></i>{{ o.start_date }} → {{ o.end_date }}</span
-          >
+          <span class="meta-chip"><i class="fa-regular fa-calendar"></i>{{ o.start_date }} → {{ o.end_date }}</span>
           <span class="meta-chip"><i class="fa-regular fa-map"></i> {{ o.location }}</span>
         </div>
+
+          <!-- ✅ member avatars go here -->
+          <div class="members-pill">
+            <ng-container *ngFor="let m of memberAvatars(o); let i = index">
+              <img class="member-ava" [src]="m.avatar_url || 'assets/default_pfp.jpg'" (error)="onImgError($event)"
+                [alt]="m.name || 'member'" />
+            </ng-container>
+          </div>
+
       </div>
     </article>
 
     <p *ngIf="!outings?.length" class="empty">No outings yet. Create your first one!</p>
   </div>
 
+  <!-- ✅ Invite modal -->
+  <div class="modal-backdrop" *ngIf="inviteModalOuting" (click)="closeInviteModal()"></div>
+
+  <div class="modal" *ngIf="inviteModalOuting" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <button class="modal-x" (click)="closeInviteModal()" aria-label="Close">✕</button>
+
+    <h2 class="modal-title">Invite friends to {{ inviteModalOuting.title }}</h2>
+
+    <div class="modal-body">
+      <div *ngIf="friendsLoading">Loading friends…</div>
+      <div *ngIf="!friendsLoading && !friends.length">You have no friends to invite.</div>
+
+      <div class="friend-row" *ngFor="let f of friends">
+        <img class="friend-ava" [src]="avatarUrl(f)" (error)="onImgError($event)" />
+        <div class="friend-name">{{ f.display_name || f.name || f.email }}</div>
+        <button class="invite-btn" (click)="inviteFriend(f.email)">Invite</button>
+      </div>
+
+    </div>
+  </div>
+
+
   <!-- Delete confirm modal -->
   <div class="modal-backdrop" *ngIf="confirmId !== null" (click)="closeDeleteConfirm()"></div>
 
-  <div
-    class="modal"
-    *ngIf="confirmId !== null"
-    role="dialog"
-    aria-modal="true"
-    (click)="$event.stopPropagation()"
-  >
+  <div class="modal" *ngIf="confirmId !== null" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <button class="modal-x" (click)="closeDeleteConfirm()" aria-label="Close">✕</button>
 
     <h2 class="modal-title">Delete outing?</h2>
     <p class="modal-text">
       Once you delete an outing, it can't be restored. Are you sure you want to delete
-      <strong>{{ confirmTitle || 'this trip' }}</strong
-      >?
+      <strong>{{ confirmTitle || 'this trip' }}</strong>?
     </p>
 
     <div class="modal-actions">
@@ -171,4 +198,6 @@
       <button class="danger" (click)="confirmDelete()">Delete</button>
     </div>
   </div>
+
+
 </section>

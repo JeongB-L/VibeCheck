@@ -84,3 +84,36 @@ export async function sendVerificationEmail(options: EmailOptions) {
 
   return true;
 }
+
+
+
+export async function sendNotificationEmail(opts: {
+  to: string;
+  subject: string;
+  text: string;
+}) {
+  const { to, subject, text } = opts;
+
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+    console.warn(
+      "GMAIL_USER or GMAIL_PASS not found! Notification email only logged."
+    );
+    console.log("📧 NOTIFICATION EMAIL", to, subject, text);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_PASS,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"VibeCheck" <${process.env.GMAIL_USER}>`,
+    to,
+    subject,
+    text,
+  });
+}

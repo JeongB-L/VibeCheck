@@ -1,62 +1,264 @@
 import { Router } from "express";
 import { supabase as db } from "../lib/supabase";
+import { publicUrlFromPath } from "../utils/storage";
+import openAI, { OpenAI } from "openai";
+import PDFDocument from "pdfkit";
+import crypto from "crypto";
+import { getNotificationPrefs } from "../utils/notification-prefs";
+import { sendNotificationEmail } from "../utils/emails";
+import { maybeSendSameDayOutingReminder } from "../utils/outing-reminder-immediate";
+
+// --- helpers: robust normalizer for GPT output ---
+type PlanStop = {
+  time?: string;
+  name?: string;
+  address?: string;
+  categories?: string[];
+  matches?: string[];
+  priceRange?: string | null;
+  description?: string;
+  cost_estimate?: string; // may exist in your saved data
+  notes?: string;
+};
+
+type PlanDay = { date?: string; timeline?: PlanStop[] };
+type GeneratedPlan = {
+  planId?: string;
+  title?: string;
+  name?: string; // sometimes the model uses 'name' instead of 'title'
+  badge?: string[];
+  overview?: string;
+  itinerary?: PlanDay[];
+  total_budget_estimate?: string;
+  fairness_scores?: Record<string, number>;
+  avgFairnessIndex?: number | null; // your saved example uses this (0-100)
+  summary?: {
+    durationHours?: number;
+    totalDistanceKm?: number;
+    avgFairnessIndex?: number; // 0-1 variant; normalize below
+    satisfaction?: Record<string, number>;
+    text?: string;
+  };
+  tips?: string;
+};
+
+type PlansPayload = { city?: string; plans?: GeneratedPlan[] };
+
+/** Coerce unknown model JSON -> consistent, safe shape for the client */
+function normalizePlans(raw: any): PlansPayload {
+  const out: PlansPayload = { city: "", plans: [] };
+  if (!raw || typeof raw !== "object") return out;
+
+  out.city = typeof raw.city === "string" ? raw.city : "";
+
+  const rawPlans: any[] = Array.isArray(raw.plans) ? raw.plans : [];
+  const plans: GeneratedPlan[] = [];
+
+  for (const rp of rawPlans) {
+    const plan: GeneratedPlan = {
+      planId: typeof rp.planId === "string" ? rp.planId : undefined,
+      title: typeof rp.title === "string" ? rp.title : undefined,
+      name: typeof rp.name === "string" ? rp.name : undefined,
+      badge: Array.isArray(rp.badge)
+        ? rp.badge.filter((x: any) => typeof x === "string")
+        : [],
+      overview: typeof rp.overview === "string" ? rp.overview : "",
+      total_budget_estimate:
+        typeof rp.total_budget_estimate === "string"
+          ? rp.total_budget_estimate
+          : undefined,
+      fairness_scores:
+        rp.fairness_scores && typeof rp.fairness_scores === "object"
+          ? rp.fairness_scores
+          : {},
+      avgFairnessIndex:
+        typeof rp.avgFairnessIndex === "number" ? rp.avgFairnessIndex : null,
+      tips: typeof rp.tips === "string" ? rp.tips : "",
+      itinerary: [],
+      summary: undefined,
+    };
+
+    // Summary (either shape)
+    if (rp.summary && typeof rp.summary === "object") {
+      const s = rp.summary;
+      plan.summary = {
+        durationHours:
+          typeof s.durationHours === "number" ? s.durationHours : undefined,
+        totalDistanceKm:
+          typeof s.totalDistanceKm === "number" ? s.totalDistanceKm : undefined,
+        avgFairnessIndex:
+          typeof s.avgFairnessIndex === "number"
+            ? s.avgFairnessIndex
+            : undefined,
+        satisfaction:
+          s.satisfaction && typeof s.satisfaction === "object"
+            ? s.satisfaction
+            : undefined,
+        // 👇 ADD THIS LINE 👇
+        text: typeof s.text === "string" ? s.text : undefined,
+      };
+    }
+
+    // Itinerary
+    const rawDays: any[] = Array.isArray(rp.itinerary) ? rp.itinerary : [];
+    for (const d of rawDays) {
+      const day: PlanDay = { date: "", timeline: [] };
+      day.date = typeof d.date === "string" ? d.date : "";
+
+      const rawStops: any[] = Array.isArray(d.timeline) ? d.timeline : [];
+      for (const st of rawStops) {
+        const stop: PlanStop = {
+          time: typeof st.time === "string" ? st.time : "",
+          name: typeof st.name === "string" ? st.name : "",
+          address: typeof st.address === "string" ? st.address : "",
+          categories: Array.isArray(st.categories)
+            ? st.categories.filter((x: any) => typeof x === "string")
+            : [],
+          matches: Array.isArray(st.matches)
+            ? st.matches.filter((x: any) => typeof x === "string")
+            : [],
+          priceRange:
+            typeof st.priceRange === "string"
+              ? st.priceRange
+              : typeof st.cost_estimate === "string" &&
+                /\$+|free/i.test(st.cost_estimate)
+              ? st.cost_estimate.match(/\$+/)?.[0] ?? "Free"
+              : null,
+          description: typeof st.description === "string" ? st.description : "",
+          cost_estimate:
+            typeof st.cost_estimate === "string" ? st.cost_estimate : undefined,
+          notes: typeof st.notes === "string" ? st.notes : undefined,
+        };
+
+        // Skip stops with neither name nor address
+        if (!stop.name && !stop.address) continue;
+        day.timeline!.push(stop);
+      }
+
+      // Skip empty days
+      if (!day.timeline!.length) continue;
+      plan.itinerary!.push(day);
+    }
+
+    // Ensure we have a title
+    if (!plan.title && plan.name) plan.title = plan.name;
+    if (!plan.title) plan.title = plan.planId || "Plan";
+
+    // Keep only usable plans
+    if (plan.itinerary && plan.itinerary.length) plans.push(plan);
+  }
+
+  out.plans = plans;
+  return out;
+}
 
 const router = Router();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+function normEmail(e?: string) {
+  const v = (e || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    throw new Error("Valid email is required");
+  return v;
+}
+async function getUserByEmail(email: string) {
+  const e = normEmail(email);
+  const { data, error } = await db
+    .from("users")
+    .select("user_id, email, first_name, last_name")
+    .eq("email", e)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("User not found");
+  return data;
+}
+async function getOuting(id: number) {
+  const { data, error } = await db
+    .from("outings")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+async function isAdminOrCreator(outingId: number, userId: string) {
+  // creator?
+  const outing = await getOuting(outingId);
+  if (outing && outing.creator_id === userId) return true;
+
+  // admin member?
+  const { data, error } = await db
+    .from("outing_members")
+    .select("role")
+    .eq("outing_id", outingId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data && data.role === "admin";
+}
 
 // helper to get user_id from email (like profile routes)
 async function getUserIdFromEmail(email: string): Promise<string | null> {
   if (!email) return null;
-  
+
   const { data: user, error } = await db
     .from("users")
     .select("user_id")
     .eq("email", email.trim().toLowerCase())
     .maybeSingle();
-    
+
   if (error || !user) return null;
   return user.user_id;
 }
 
 // GET /api/outings  -> list my outings
+// GET /api/outings  -> list outings I own OR I’m a member of
 router.get("/outings", async (req, res) => {
   try {
-    console.log("=== GET /api/outings START ===");
-    console.log("Query params:", req.query);
-    
-    const email = String(req.query.email ?? "").trim().toLowerCase();
-    console.log("Email extracted:", email);
-    
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      console.log("❌ Invalid email format");
       return res.status(400).json({ error: "Valid email is required" });
     }
 
-    console.log("✅ Email format valid, looking up user...");
     const userId = await getUserIdFromEmail(email);
-    console.log("User ID found:", userId);
-    
-    if (!userId) {
-      console.log("❌ User not found in database");
-      return res.status(401).json({ error: "User not found" });
-    }
+    if (!userId) return res.status(401).json({ error: "User not found" });
 
-    console.log("✅ User found, querying outings...");
-    const { data, error } = await db
-      .from("outings")
-      .select("*")
-      .eq("creator_id", userId)
-      .order("start_date", { ascending: true });
+    // 1) Outings I created
+    const ownQ = db.from("outings").select("*").eq("creator_id", userId);
 
-    if (error) {
-      console.error("❌ Database query error:", error);
-      return res.status(500).json({ error: error.message });
-    }
-    
-    console.log("✅ Query successful, data:", data);
-    console.log("=== GET /api/outings END ===");
-    res.json({ outings: data ?? [] });
+    // 2) Outings where I’m a member (join via outing_members)
+    //    Supabase: select from outing_members and pull the joined outing
+    const memberQ = db
+      .from("outing_members")
+      .select("outing:outings(*)")
+      .eq("user_id", userId);
+
+    const [{ data: own, error: ownErr }, { data: mem, error: memErr }] =
+      await Promise.all([ownQ, memberQ]);
+
+    if (ownErr) return res.status(500).json({ error: ownErr.message });
+    if (memErr) return res.status(500).json({ error: memErr.message });
+
+    const memberOutings = (mem || []).map((r: any) => r.outing).filter(Boolean);
+
+    // merge + dedupe by id
+    const seen = new Set<number>();
+    const all = ([] as any[])
+      .concat(own || [], memberOutings)
+      .filter((o) => o && !seen.has(o.id) && seen.add(o.id));
+
+    // sort same as before
+    all.sort((a, b) =>
+      a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0
+    );
+
+    res.json({ outings: all });
   } catch (e: any) {
-    console.error("❌ GET /api/outings exception:", e);
     res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
@@ -66,9 +268,9 @@ router.post("/outings", async (req, res) => {
   try {
     console.log("=== POST /api/outings START ===");
     console.log("Request body:", req.body);
-    
+
     const { email, title, location, start_date, end_date } = req.body || {};
-    
+
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       console.log("❌ Invalid email format");
       return res.status(400).json({ error: "Valid email is required" });
@@ -81,7 +283,7 @@ router.post("/outings", async (req, res) => {
     console.log("✅ Validation passed, looking up user...");
     const userId = await getUserIdFromEmail(email);
     console.log("User ID found:", userId);
-    
+
     if (!userId) {
       console.log("❌ User not found in database");
       return res.status(401).json({ error: "User not found" });
@@ -98,8 +300,15 @@ router.post("/outings", async (req, res) => {
       console.error("❌ Database insert error:", error);
       return res.status(500).json({ error: error.message });
     }
-    
+
     console.log("✅ Outing created successfully:", data);
+
+    // 🔔 If this outing is between D-3..D0 and it's after DAILY_SEND_HOUR,
+    // send today's D-X reminder immediately to the creator.
+    maybeSendSameDayOutingReminder(data.id, [String(userId)]).catch((e) =>
+      console.error("Immediate outing reminder after create failed", e)
+    );
+
     console.log("=== POST /api/outings END ===");
     res.status(201).json({ outing: data });
   } catch (e: any) {
@@ -108,18 +317,184 @@ router.post("/outings", async (req, res) => {
   }
 });
 
+// GET /api/outings/invites?email=me@example.com&status=pending
+router.get("/outings/invites", async (req, res) => {
+  try {
+    const email = String(req.query?.email || "");
+    const status = String(req.query?.status || "pending").toLowerCase(); // optional: pending|accepted|declined
+    const me = await getUserByEmail(email);
 
+    // grab my invites (as invitee)
+    const { data: invs, error } = await db
+      .from("outing_invites")
+      .select(
+        "id, outing_id, inviter_id, invitee_id, status, created_at, responded_at"
+      )
+      .eq("invitee_id", me.user_id)
+      .eq("status", status);
+    if (error) return res.status(500).json({ error: error.message });
+
+    if (!invs?.length) return res.json({ invites: [] });
+
+    // fetch outing + inviter info
+    const outingIds = [...new Set(invs.map((i) => i.outing_id))];
+    const inviterIds = [...new Set(invs.map((i) => i.inviter_id))];
+
+    const [{ data: outings, error: oErr }, { data: users, error: uErr }] =
+      await Promise.all([
+        db
+          .from("outings")
+          .select("id, title, location, start_date, end_date")
+          .in("id", outingIds),
+        db
+          .from("users")
+          .select(
+            "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+          )
+          .in("user_id", inviterIds),
+      ]);
+    if (oErr) return res.status(500).json({ error: oErr.message });
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const outingById = new Map((outings || []).map((o) => [o.id, o]));
+    const userById = new Map((users || []).map((u: any) => [u.user_id, u]));
+
+    const invites = invs.map((i) => {
+      const inv = userById.get(i.inviter_id) || {};
+      const name = [inv.first_name, inv.last_name].filter(Boolean).join(" ");
+      return {
+        id: i.id,
+        status: i.status,
+        created_at: i.created_at,
+        responded_at: i.responded_at,
+        outing: outingById.get(i.outing_id) || null,
+        inviter: {
+          user_id: inv.user_id,
+          email: inv.email,
+          name,
+          display_name: inv.profiles?.display_name ?? null,
+          avatar_path: publicUrlFromPath(inv.profiles?.avatar_path), // ✅ make it a public URL
+        },
+      };
+    });
+
+    res.json({ invites });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    res.status(code).json({ error: msg });
+  }
+});
+
+// =============================================================
+// NEW: Respond to an invite (accept/decline)
+// POST /api/outings/invites/:inviteId/respond  { email, action: 'accept'|'decline' }
+// =============================================================
+router.post("/outings/invites/:inviteId/respond", async (req, res) => {
+  try {
+    const inviteId = Number(req.params.inviteId);
+    const me = await getUserByEmail(req.body?.email);
+    const action = String(req.body?.action || "").toLowerCase();
+
+    if (!["accept", "decline"].includes(action)) {
+      return res
+        .status(400)
+        .json({ error: "action must be 'accept' or 'decline'" });
+    }
+
+    // Only the invitee can respond
+    const { data: invite, error: iErr } = await db
+      .from("outing_invites")
+      .select("id, outing_id, invitee_id, status")
+      .eq("id", inviteId)
+      .maybeSingle();
+    if (iErr) return res.status(500).json({ error: iErr.message });
+    if (!invite) return res.status(404).json({ error: "Invite not found" });
+    if (invite.invitee_id !== me.user_id)
+      return res.status(403).json({ error: "Not your invite" });
+    if (invite.status !== "pending")
+      return res.status(409).json({ error: "Invite already handled" });
+
+    const newStatus = action === "accept" ? "accepted" : "declined";
+
+    const { data, error } = await db
+      .from("outing_invites")
+      .update({ status: newStatus, responded_at: new Date().toISOString() })
+      .eq("id", inviteId)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    // 🔔 If they ACCEPTED, they effectively joined the outing.
+    // If the outing is in D-3..D0 and it's after DAILY_SEND_HOUR,
+    // send today's D-X reminder to this user immediately.
+    if (newStatus === "accepted") {
+      maybeSendSameDayOutingReminder(invite.outing_id, [
+        String(me.user_id),
+      ]).catch((e) =>
+        console.error("Immediate outing reminder after accept failed", e)
+      );
+    }
+
+    // Trigger will auto-insert into outing_members if 'accepted'
+    res.json({ invite: data });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    res.status(code).json({ error: msg });
+  }
+});
 
 // DELETE /api/outings/:id  -> delete
 router.delete("/outings/:id", async (req, res) => {
   try {
-    const email = String(req.query.email ?? "").trim().toLowerCase();
+    const id = Number(req.params.id);
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (!id) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
 
     const userId = await getUserIdFromEmail(email);
     if (!userId) return res.status(401).json({ error: "User not found" });
+
+    // load outing
+    const outing = await getOuting(id);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // ✅ only creator can delete
+    if (outing.creator_id !== userId) {
+      return res
+        .status(403)
+        .json({ error: "Only the outing owner can delete this outing" });
+    }
+
+    // 🔥 delete all child rows that reference this outing
+    const tables = [
+      "outing_messages",
+      "outing_plan_votes",
+      "outing_plans",
+      "outing_preferences",
+      "outing_members",
+      "outing_invites",
+    ];
+
+    for (const table of tables) {
+      const { error: childErr } = await db
+        .from(table)
+        .delete()
+        .eq("outing_id", id);
+      if (childErr) {
+        return res.status(500).json({ error: childErr.message });
+      }
+    }
 
     const { error } = await db
       .from("outings")
@@ -134,12 +509,13 @@ router.delete("/outings/:id", async (req, res) => {
   }
 });
 
-
 // GET /api/outings/:id  -> fetch a single outing (scoped to the caller's email)
 router.get("/outings/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const email = String(req.query.email ?? "").trim().toLowerCase();
+    const email = String(req.query.email ?? "")
+      .trim()
+      .toLowerCase();
 
     if (!id) return res.status(400).json({ error: "Invalid id" });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -149,22 +525,1908 @@ router.get("/outings/:id", async (req, res) => {
     const userId = await getUserIdFromEmail(email);
     if (!userId) return res.status(401).json({ error: "User not found" });
 
-    const { data, error } = await db
+    // 1) fetch the outing by id (no creator filter)
+    const { data: outing, error: oErr } = await db
       .from("outings")
       .select("*")
       .eq("id", id)
-      .eq("creator_id", userId)
-      .maybeSingle();            // ← returns null when not found
+      .maybeSingle();
+    if (oErr) return res.status(500).json({ error: oErr.message });
+    if (!outing) return res.status(404).json({ error: "Not found" });
 
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: "Not found" });
+    // 2) authorize: creator OR member
+    if (outing.creator_id !== userId) {
+      const { data: mem, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (mErr) return res.status(500).json({ error: mErr.message });
+      if (!mem) return res.status(403).json({ error: "Not allowed" });
+    }
 
-    return res.json({ outing: data });
+    return res.json({ outing });
   } catch (e: any) {
     console.error("GET /outings/:id error", e);
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 
+// NEW: List members (with avatar/display name) for an outing
+// GET /api/outings/:id/members
+// =============================================================
+router.get("/outings/:id/members", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: "Invalid id" });
+
+    // 1️⃣ Get the outing (to identify owner)
+    const { data: outing, error: oErr } = await db
+      .from("outings")
+      .select("creator_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (oErr) return res.status(500).json({ error: oErr.message });
+    if (!outing) return res.status(404).json({ error: "Outing not found" });
+
+    // 2️⃣ Get all members
+    const { data: rows, error: mErr } = await db
+      .from("outing_members")
+      .select("user_id, role, joined_at")
+      .eq("outing_id", id);
+    if (mErr) return res.status(500).json({ error: mErr.message });
+
+    const memberIds = rows.map((r) => r.user_id);
+    // Combine members + owner for lookup
+    const allIds = Array.from(new Set([...memberIds, outing.creator_id]));
+
+    // 3️⃣ Fetch user data
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", allIds);
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
+
+    // 4️⃣ Build owner object
+    const ownerUser = byId.get(outing.creator_id);
+    const owner = ownerUser
+      ? {
+          user_id: ownerUser.user_id,
+          email: ownerUser.email,
+          name: [ownerUser.first_name, ownerUser.last_name]
+            .filter(Boolean)
+            .join(" "),
+          display_name: ownerUser.profiles?.display_name ?? null,
+          avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
+          role: "owner",
+          joined_at: null,
+          is_owner: true,
+        }
+      : null;
+
+    // 5️⃣ Build members excluding owner
+    const members = rows
+      .filter((r) => r.user_id !== outing.creator_id) // 🚫 exclude owner
+      .map((r) => {
+        const u: any = byId.get(r.user_id) || {};
+        const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+        return {
+          user_id: r.user_id,
+          email: u.email || null,
+          name,
+          display_name: u.profiles?.display_name ?? null,
+          avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+          role: r.role ?? "member",
+          joined_at: r.joined_at,
+          is_owner: false,
+        };
+      });
+
+    res.json({ owner, members });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+// =============================================================
+// POST /api/outings/:id/invite  { inviterEmail, inviteeEmail }
+// - Allows re-invite after decline/accept/remove
+// - Idempotent if a PENDING invite already exists
+// =============================================================
+router.post("/outings/:id/invite", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const inviter = await getUserByEmail(req.body?.inviterEmail);
+    const invitee = await getUserByEmail(req.body?.inviteeEmail);
+
+    // Must be creator or admin
+    if (!(await isAdminOrCreator(outingId, inviter.user_id))) {
+      return res
+        .status(403)
+        .json({ error: "Not allowed to invite for this outing" });
+    }
+
+    // Already a member? (don't invite again)
+    const { data: existsMember, error: mErr } = await db
+      .from("outing_members")
+      .select("user_id")
+      .eq("outing_id", outingId)
+      .eq("user_id", invitee.user_id)
+      .maybeSingle();
+    if (mErr) return res.status(500).json({ error: mErr.message });
+    if (existsMember)
+      return res.status(409).json({ error: "User is already a member" });
+
+    // Try to insert a pending invite. Thanks to the PARTIAL unique index,
+    // conflict only happens if there's already a PENDING invite.
+    const { data, error } = await db
+      .from("outing_invites")
+      .insert([
+        {
+          outing_id: outingId,
+          inviter_id: inviter.user_id,
+          invitee_id: invitee.user_id,
+          status: "pending", // <- key
+          responded_at: null,
+        },
+      ])
+      .select()
+      .single();
+
+    if (!error) {
+      return res.status(201).json({ invite: data });
+    }
+
+    // If duplicate pending invite, make it idempotent (turn any existing row back to pending)
+    // Supabase error codes align with Postgres; duplicate is 23505.
+    if (error.code === "23505") {
+      const { data: upd, error: updErr } = await db
+        .from("outing_invites")
+        .update({ status: "pending", responded_at: null })
+        .eq("outing_id", outingId)
+        .eq("invitee_id", invitee.user_id)
+        .select()
+        .single();
+
+      if (updErr) return res.status(500).json({ error: updErr.message });
+      return res.status(200).json({ invite: upd });
+    }
+
+    // Other DB error
+    return res.status(500).json({ error: error.message });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    return res.status(code).json({ error: msg });
+  }
+});
+
+// =============================================================
+// NEW: List invites for me (incoming + outgoing) for one outing
+// GET /api/outings/:id/invites?email=me@example.com
+// =============================================================
+router.get("/outings/:id/invites", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const me = await getUserByEmail(String(req.query?.email));
+
+    const { data: invs, error } = await db
+      .from("outing_invites")
+      .select("id, inviter_id, invitee_id, status, created_at, responded_at")
+      .eq("outing_id", outingId);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const ids = [...new Set(invs.flatMap((i) => [i.inviter_id, i.invitee_id]))];
+    if (!ids.length) return res.json({ invites: [] });
+
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", ids);
+    if (uErr) return res.status(500).json({ error: uErr.message });
+
+    const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
+    const invites = invs.map((i) => {
+      const inv = byId.get(i.inviter_id) || {};
+      const iee = byId.get(i.invitee_id) || {};
+      const fmt = (u: any) => ({
+        user_id: u.user_id,
+        email: u.email,
+        name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+        display_name: u.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+      });
+      return {
+        id: i.id,
+        outing_id: outingId,
+        inviter: fmt(inv),
+        invitee: fmt(iee),
+        status: i.status,
+        created_at: i.created_at,
+        responded_at: i.responded_at,
+        isMine: i.invitee_id === me.user_id || i.inviter_id === me.user_id,
+      };
+    });
+
+    res.json({ invites });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    res.status(code).json({ error: msg });
+  }
+});
+
+// =============================================================
+// POST /api/outings/:id/removeMember  { requesterEmail, memberEmail }
+// Removes from outing_members. Does NOT touch invites.
+// =============================================================
+router.post("/outings/:id/removeMember", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const requester = await getUserByEmail(req.body?.requesterEmail);
+    const toRemove = await getUserByEmail(req.body?.memberEmail);
+
+    if (!(await isAdminOrCreator(outingId, requester.user_id))) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    // Can't remove the creator
+    const outing = await getOuting(outingId);
+    if (outing?.creator_id === toRemove.user_id) {
+      return res.status(409).json({ error: "Owner cannot be removed" });
+    }
+
+    const { error } = await db
+      .from("outing_members")
+      .delete()
+      .eq("outing_id", outingId)
+      .eq("user_id", toRemove.user_id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    const msg = e?.message || "Server error";
+    const code = /Valid email|User not found/.test(msg) ? 400 : 500;
+    res.status(code).json({ error: msg });
+  }
+});
+
+router.post("/outings/:id/updateUserOutingPreferences", async (req, res) => {
+  try {
+    const { id: outingId } = req.params;
+    const { userId, activities, food, budget } = req.body;
+
+    // Validate required fields
+    if (
+      !outingId ||
+      !userId ||
+      !Array.isArray(activities) ||
+      !Array.isArray(food) ||
+      !Array.isArray(budget)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing or invalid required fields" });
+    }
+
+    // Fetch the outing to verify existence
+    const outing = await getOuting(Number(outingId));
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // Upsert into outing_preferences table (updates if exists, inserts if not)
+    const { data: updatedPref, error: upsertErr } = await db
+      .from("outing_preferences")
+      .upsert({
+        user_id: userId,
+        outing_id: Number(outingId),
+        activities,
+        food,
+        budget,
+      })
+      .select()
+      .single();
+
+    if (upsertErr) throw upsertErr;
+
+    // Return success
+    res.json({
+      success: true,
+      message: "User outing preferences updated successfully",
+      outingId: Number(outingId),
+    });
+  } catch (e: any) {
+    console.error("Error updating user outing preferences:", e);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Reuse the same query logic from router.get("/outings/:id/members")
+async function getOutingMembers(outingId: number) {
+  // 1️⃣ Get outing (to identify owner)
+  const { data: outing, error: oErr } = await db
+    .from("outings")
+    .select("creator_id")
+    .eq("id", outingId)
+    .maybeSingle();
+  if (oErr) throw new Error(oErr.message);
+  if (!outing) throw new Error("Outing not found");
+
+  // 2️⃣ Get all members
+  const { data: rows, error: mErr } = await db
+    .from("outing_members")
+    .select("user_id, role, joined_at")
+    .eq("outing_id", outingId);
+  if (mErr) throw new Error(mErr.message);
+
+  const memberIds = rows.map((r) => r.user_id);
+  const allIds = Array.from(new Set([...memberIds, outing.creator_id]));
+
+  // 3️⃣ Fetch user data
+  const { data: users, error: uErr } = await db
+    .from("users")
+    .select(
+      "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+    )
+    .in("user_id", allIds);
+  if (uErr) throw new Error(uErr.message);
+
+  const byId = new Map(users?.map((u: any) => [u.user_id, u]) || []);
+
+  const ownerUser = byId.get(outing.creator_id);
+  const owner = ownerUser
+    ? {
+        user_id: ownerUser.user_id,
+        email: ownerUser.email,
+        name: [ownerUser.first_name, ownerUser.last_name]
+          .filter(Boolean)
+          .join(" "),
+        display_name: ownerUser.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(ownerUser.profiles?.avatar_path),
+        role: "owner",
+        joined_at: null,
+        is_owner: true,
+      }
+    : null;
+
+  const members = rows
+    .filter((r) => r.user_id !== outing.creator_id)
+    .map((r) => {
+      const u: any = byId.get(r.user_id) || {};
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+      return {
+        user_id: r.user_id,
+        email: u.email || null,
+        name,
+        display_name: u.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+        role: r.role ?? "member",
+        joined_at: r.joined_at,
+        is_owner: false,
+      };
+    });
+
+  return { owner, members };
+}
+const VOTE_WINDOW_SECONDS = 3600; // 1 hour
+
+// ---------- NEW: helpers for voting participants + emails ----------
+
+// Get all participants (owner + members) used in voting emails
+async function getOutingParticipantsForVoting(
+  outingId: number
+): Promise<{ user_id: string; email: string | null }[]> {
+  const { owner, members } = await getOutingMembers(outingId);
+
+  const result: { user_id: string; email: string | null }[] = [];
+  if (owner && owner.user_id) {
+    result.push({ user_id: String(owner.user_id), email: owner.email || null });
+  }
+  for (const m of members || []) {
+    if (!m.user_id) continue;
+    result.push({ user_id: String(m.user_id), email: m.email || null });
+  }
+
+  const seen = new Set<string>();
+  return result.filter((u) => {
+    if (seen.has(u.user_id)) return false;
+    seen.add(u.user_id);
+    return true;
+  });
+}
+
+/**
+ * Send "voting started" email to all outing participants.
+ * We pass the explicit `deadlineIso` (from voting_ends_at) instead of recomputing.
+ */
+async function sendVotingStartedEmails(
+  outingId: number,
+  deadlineIso: string | null
+) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  for (const p of participants) {
+    if (!p.email) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting started for "${outing.title}"`,
+      text:
+        `Voting has started for the outing "${outing.title}". ` +
+        (deadlineIso
+          ? `Please cast your vote before: ${deadlineIso}.`
+          : `Please cast your vote as soon as possible.`),
+    });
+  }
+}
+
+/**
+ * Send reminder emails (for a single outing) to users who have NOT voted.
+ * Uses outing_plan_votes and respects prefs.
+ */
+async function sendVotingReminderForOuting(
+  outingId: number,
+  deadlineIso: string
+) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  const { data: votes, error: vErr } = await db
+    .from("outing_plan_votes")
+    .select("user_id")
+    .eq("outing_id", outingId);
+
+  if (vErr) {
+    console.error("Voting reminder: failed to load votes", vErr.message);
+    return;
+  }
+
+  const votedSet = new Set<string>(
+    (votes || []).map((v: any) => String(v.user_id))
+  );
+
+  for (const p of participants) {
+    if (!p.email) continue;
+    if (votedSet.has(String(p.user_id))) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting reminder: "${outing.title}"`,
+      text: `You haven’t voted yet for the outing "${outing.title}". Please vote before the deadline: ${deadlineIso}.`,
+    });
+  }
+}
+
+/**
+ * Send "voting ended" email ONCE per outing (per voting window).
+ * Uses outing_plans.voting_end_notified.
+ */
+async function sendVotingEndedEmails(outingId: number) {
+  const outing = await getOuting(outingId);
+  if (!outing) return;
+
+  const participants = await getOutingParticipantsForVoting(outingId);
+
+  for (const p of participants) {
+    if (!p.email) continue;
+
+    const prefs = await getNotificationPrefs(String(p.user_id));
+    if (!prefs.emailEnabled || !prefs.votingEnabled) continue;
+
+    await sendNotificationEmail({
+      to: p.email,
+      subject: `Voting ended for "${outing.title}"`,
+      text: `Voting for the outing "${outing.title}" has ended. You can now review the selected plan in VibeCheck.`,
+    });
+  }
+}
+
+/**
+ * CRON-FRIENDLY JOB (run every ~30 minutes):
+ * - For each outing_plans row with a voting window:
+ *   - if window active and not finalized → send reminders to non-voters
+ *   - if ended and not yet notified → send "voting ended" once + mark notified
+ */
+export async function runVotingReminderJob() {
+  try {
+    const nowMs = Date.now();
+
+    const { data: planRows, error } = await db
+      .from("outing_plans")
+      .select(
+        "outing_id, voting_ends_at, voting_finalized_at, voting_end_notified"
+      );
+
+    if (error || !planRows) {
+      console.error("Voting reminder job: query error", error?.message);
+      return;
+    }
+
+    for (const row of planRows as any[]) {
+      const outingId = row.outing_id as number;
+      const deadlineIso = row.voting_ends_at as string | null;
+      const finalizedAt = row.voting_finalized_at as string | null;
+      const alreadyNotified = !!row.voting_end_notified;
+
+      if (!deadlineIso) continue;
+
+      const deadlineMs = new Date(deadlineIso).getTime();
+      if (Number.isNaN(deadlineMs)) continue;
+
+      const ended = nowMs >= deadlineMs || !!finalizedAt;
+
+      // CASE 1: Voting has ended → send "ended" once
+      if (ended) {
+        if (!alreadyNotified) {
+          await sendVotingEndedEmails(outingId);
+          await db
+            .from("outing_plans")
+            .update({ voting_end_notified: true })
+            .eq("outing_id", outingId);
+        }
+        continue; // no reminders once ended
+      }
+
+      // CASE 2: Voting still active → send reminders every time the job runs
+      await sendVotingReminderForOuting(outingId, deadlineIso);
+    }
+  } catch (e: any) {
+    console.error("Voting reminder job failed:", e?.message || e);
+  }
+}
+
+router.post("/generate-outing", async (req, res) => {
+  console.log("=== POST /api/generate-outing START ===");
+
+  const { outingId } = req.body;
+  if (!outingId) {
+    return res.status(400).json({ error: "outingId is required" });
+  }
+  const now = new Date();
+  const votingStartsAt = now.toISOString();
+  const votingEndsAt = new Date(
+    now.getTime() + VOTE_WINDOW_SECONDS * 1000
+  ).toISOString();
+
+  const outing = await getOuting(outingId);
+  if (!outing) {
+    return res.status(404).json({ error: "Outing not found" });
+  }
+
+  const outingTitle = outing.title;
+  const outingLocation = outing.location;
+  const startDate = new Date(outing.start_date);
+  const endDate = new Date(outing.end_date);
+
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return res.status(400).json({ error: "Invalid outing dates" });
+  }
+
+  let participantNames: string[] = [];
+
+  // 2.1 Get all user preferences for this outing
+  try {
+    console.log(" - Fetching outing members for outingId:", outingId);
+
+    // 🔹 owner + members with nice display data
+    const { owner, members } = await getOutingMembers(outingId);
+
+    const participants = [owner, ...(members ?? [])].filter(Boolean);
+
+    // 🔹 Build userId -> name map
+    const nameById = new Map<string, string>();
+    for (const p of participants as any[]) {
+      const label =
+        p.display_name ||
+        p.name ||
+        (p.email ? p.email.split("@")[0] : "Unknown");
+      if (p.user_id) {
+        nameById.set(String(p.user_id), label);
+      }
+    }
+
+    // 2.1.1 Get all member user_ids for the outing (from outing_members)
+    const { data: memberRows, error: mErr } = await db
+      .from("outing_members")
+      .select("user_id")
+      .eq("outing_id", outingId);
+
+    if (mErr) return res.status(500).json({ error: mErr.message });
+
+    const memberIds = (memberRows || []).map((r: any) => r.user_id);
+    const userIds = Array.from(
+      new Set<string>([...memberIds, outing.creator_id])
+    ).map(String); // normalize to string
+
+    if (!userIds.length) {
+      req.body.userPreferences = [];
+      participantNames = [];
+    } else {
+      // 2.1.2 Fetch preferences for each user for this outing
+      const { data: prefsRows, error: pErr } = await db
+        .from("outing_preferences")
+        .select("user_id, activities, food, budget")
+        .eq("outing_id", outingId)
+        .in("user_id", userIds);
+
+      if (pErr) return res.status(500).json({ error: pErr.message });
+
+      const prefsMap = new Map<string, any>(
+        (prefsRows || []).map((p: any) => [String(p.user_id), p])
+      );
+
+      // 🔹 Build userPreferences WITH names attached
+      const userPreferences = userIds.map((uid) => {
+        const prefRow = prefsMap.get(uid);
+        return {
+          user_id: uid,
+          name: nameById.get(uid) || uid, // <- ⚠️ this is the key change
+          preferences: prefRow || {
+            activities: [],
+            food: [],
+            budget: [],
+          },
+        };
+      });
+
+      req.body.userPreferences = userPreferences;
+
+      // 🔹 Also keep a flat list of participant names for your prompt
+      participantNames = userPreferences.map(
+        (u: any) => u.name || u.user_id || "Unknown"
+      );
+    }
+
+    console.log("participantNames:", participantNames);
+    console.log("userPreferences:", req.body.userPreferences);
+  } catch (err: any) {
+    console.error("Failed to load outing preferences", err);
+    return res
+      .status(500)
+      .json({ error: err?.message || "Failed to load preferences" });
+  }
+
+  // 3. Generate an outing plan based on preferences and date
+  // 		a. write a prompt for openAI api
+  console.log(" - Generating outing plan via OpenAI for outingId:", outingId);
+  console.log("req.body.userPreferences: ", req.body.userPreferences);
+  let prompt = `You are a helpful travel planner. Generate 3 detailed outing plans for the following group outing, balancing preferences for fairness:
+  
+  Outing Title: ${outingTitle}
+  Location: ${outingLocation}
+  Start Date: ${
+    startDate.toISOString().split("T")[0]
+  } (assume full day unless specified)
+  End Date: ${
+    endDate.toISOString().split("T")[0]
+  } (assume full day unless specified)
+
+  
+  Group Preferences (aggregated from all participants):
+  ${JSON.stringify(req.body.userPreferences, null, 2)}
+  
+  
+  Create 3 alternative day-by-day itineraries that incorporate the group's preferred activities, food options, and budget considerations. For each plan, ensure a timeline-based structure with dated activities and meals. Compute a fairness score for each user (0-100%) based on how much of their individual preferences (activities, food, budget) are reflected in the plan—higher scores mean better balance across the group. Also include total average fairness score (0-100%). Also include badges for itinerary like "Highest Thrill", "Art Forward" that best suit each itinerary. 
+  
+  Structure the output strictly as JSON with this schema:
+  {
+  "city": "city name"
+	"plans": [
+	  {
+		"planId": "plan1",
+		"name": "art day",
+    "badge": ["Moderate Cost", "Art Thrill", ...],
+    "overview": "Brief summary of the plan",
+		"itinerary": [
+		  {
+			"date": "YYYY-MM-DD",
+			"timeline": [
+			  {
+				"time": "e.g., 9:00 AM - 12:00 PM",
+        "name": "Art Institute of Chicago"
+        "address": "111 S Michigan Ave, Chicago, IL 60603"
+				"categories": ["Biking", "Outdoor"],
+				"description": "Detailed activity",
+        "matches": ["username1", "username2"],
+				"cost_estimate": "Budget-friendly estimate per person",
+			  },
+			  {
+				"time": "e.g., 12:00 PM - 1:00 PM",
+        "name": "MingHin Cuisine (Chinatown)",
+				"address": "2168 S Archer Ave, Chicago, IL 60616",
+        "categories": ["Dim Sum", "Food"],
+				"description": "Food suggestion",
+				"matches": ["username3"],
+				"cost_estimate": "Per person",
+			  }
+			]
+		  }
+		],
+		"total_budget_estimate": "Overall group estimate",
+    "avgFairnessIndex": 86
+		"fairness_scores": {
+		  "username1": 85, // Example: percentage (0-100) for each user_id from preferences
+		  "username2": 92
+		  // ... for all users
+		},
+		"tips": "Additional suggestions"
+	  },
+	  {
+		"title": "plan2",
+		// ... same structure as plan1
+	  },
+	  {
+		"title": "plan3",
+		// ... same structure as plan1
+	  }
+	]
+  }
+  
+	Ensure each plan is fun, feasible for the location and dates,
+	varies in focus (e.g., one budget-heavy, one adventure-focused),
+	and maximizes overall fairness. Keep it realistic and engaging. Above json format is just an example. The plans should come from the user preferences. Also use the particpant names given above for fairness score and matches. And the badges should highlight the key concepts and focus of the outing.`;
+
+  //		b. call openAI api with the prompt
+  console.log(" - Sending prompt to OpenAI API");
+  try {
+    const completion = await openai.chat.completions.create({
+      // This takes at least 20 seconds.
+      // TODO: maybe add a cancel generating outing.
+      model: "gpt-5-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert itinerary planner specializing in group outings with fairness optimization.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const rawResponse = completion.choices[0]?.message?.content;
+    if (!rawResponse) {
+      throw new Error("No response from OpenAI");
+    }
+    console.log(" - OpenAI response received");
+    //console.log("Raw OpenAI Response:", rawResponse);
+
+    console.log(" - Parsing OpenAI response");
+    //    c. parse the response from OpenAI api
+    let generatedPlans;
+    try {
+      generatedPlans = JSON.parse(rawResponse);
+    } catch (parseErr) {
+      console.error("Failed to parse OpenAI response as JSON:", parseErr);
+
+      // Fallback: Treat as plain text if JSON fails
+      generatedPlans = {
+        plans: [
+          {
+            title: "plan1",
+            overview: rawResponse,
+            itinerary: [],
+            total_budget_estimate: "TBD",
+            fairness_scores: {},
+            tips: "Plan generated; review for details.",
+          },
+        ],
+      };
+    }
+
+    // 4. Save all the generated outing plans to db and map it with the current outing
+    console.log(" - Saving generated plans to database");
+    const { data: savedPlan, error: saveErr } = await db
+      .from("outing_plans")
+      .upsert(
+        {
+          outing_id: outingId,
+          plans: JSON.stringify(generatedPlans),
+          created_at: new Date().toISOString(),
+          voting_starts_at: votingStartsAt,
+          voting_ends_at: votingEndsAt,
+          voting_finalized_at: null,
+          voting_final_plan_id: null,
+          voting_end_notified: false, // 🔁 reset for new window
+        },
+
+        // Overwrite if outing_id already exists
+        { onConflict: "outing_id" }
+      )
+      .select("id")
+      .single();
+
+    if (saveErr) {
+      console.error("Failed to save plan to DB:", saveErr);
+      return res.status(500).json({ error: "Failed to save generated plan" });
+    }
+
+    const { error: clearVotesErr } = await db
+      .from("outing_plan_votes")
+      .delete()
+      .eq("outing_id", outingId);
+
+    if (clearVotesErr) {
+      console.error("Failed to clear old plan votes:", clearVotesErr);
+    }
+
+    console.log(" - Generated outing plan saved with ID:", savedPlan.id);
+    // 5. Return the generated outing plan to the client
+
+    // 🔔 Voting started: email all participants with deadline
+    sendVotingStartedEmails(outingId, votingEndsAt).catch((e) =>
+      console.error("Voting started emails failed:", e)
+    );
+
+    res.json({
+      success: true,
+      plans: generatedPlans.plans,
+      plan_id: savedPlan.id,
+    });
+    console.log("=== POST /api/generate-outing END ===");
+  } catch (apiErr: any) {
+    console.error("OpenAI API Error:", apiErr);
+    return res.status(500).json({
+      error: "Failed to generate outing plan",
+      details: apiErr.message,
+    });
+  }
+});
+
+// POST /api/outings/:id/ai-summary
+// generate short AI summary for the selected plan
+router.post("/outings/:id/ai-summary", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) return res.status(400).json({ error: "Invalid outing id" });
+
+    const { planIndex = 0 } = req.body;
+
+    // 1. Load saved plans
+    const { data, error } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "No saved plans" });
+
+    let rawPlans: any;
+    try {
+      rawPlans =
+        typeof data.plans === "string" ? JSON.parse(data.plans) : data.plans;
+    } catch {
+      return res.status(500).json({ error: "Corrupted plan data" });
+    }
+
+    const plansArray = Array.isArray(rawPlans.plans) ? rawPlans.plans : [];
+    const selectedPlan = plansArray[planIndex];
+    if (!selectedPlan) return res.status(400).json({ error: "Plan not found" });
+
+    // 2. Build a concise prompt (your original, unchanged)
+    const prompt = `You are an expert travel writer. Write a short, engaging AI summary (2-4 sentences) for the following group outing plan. 
+  Highlight the overall vibe, overall walkthrough of the tour, key highlights, and why it’s a great fit Fragile fairness score. 
+  Do not use emdash. Do not make something up that is not in the plan: ${
+    selectedPlan.avgFairnessIndex ?? "N/A"
+  }%.
+  
+  Plan title: ${selectedPlan.title || selectedPlan.name || "Untitled Plan"}
+  Badges: ${(selectedPlan.badge || []).join(", ")}
+  Overview (if any): ${selectedPlan.overview || "—"}
+  
+  Full itinerary (condensed):
+  ${selectedPlan.itinerary
+    .map(
+      (day: any) =>
+        `${day.date}: ${day.timeline
+          .map((s: any) => `${s.time || ""} ${s.name || ""}`)
+          .join(" → ")}`
+    )
+    .join("\n")}
+  
+  Tips: ${selectedPlan.tips || "—"}
+  
+  Write a friendly, exciting summary that can be shown directly to the group. Keep it under 120 words.`;
+
+    // 3. Stream response (official OpenAI Node.js streaming)
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders(); // Start streaming immediately
+
+    console.log(" - Starting OpenAI stream");
+    const stream = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a concise, enthusiastic travel summarizer.",
+        },
+        { role: "user", content: prompt },
+      ],
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      if (content) {
+        res.write(content);
+      }
+    }
+    res.end();
+    return; // Prevent any further response
+  } catch (e: any) {
+    console.error("AI summary streaming error:", e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate summary" });
+    } else {
+      res.write("\n\nError: Failed to complete summary.");
+      res.end();
+    }
+  }
+});
+
+// GET /api/outings/:id/plan  -> normalized payload
+router.get("/outings/:id/plan", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) return res.status(400).json({ error: "Invalid id" });
+
+    const { data, error } = await db
+      .from("outing_plans")
+      .select(
+        "plans, created_at, id, outing_id, voting_starts_at, voting_ends_at, voting_finalized_at, voting_final_plan_id"
+      )
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data)
+      return res.status(404).json({ error: "No saved plan for this outing" });
+
+    let raw = data.plans;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        raw = {};
+      }
+    }
+
+    const normalized = normalizePlans(raw);
+
+    // voting deadline & closed flag
+    const createdMs = data.created_at
+      ? new Date(data.created_at).getTime()
+      : NaN;
+    let voting_deadline: string | null = null;
+    let voting_closed = false;
+
+    if (data.voting_starts_at && data.voting_ends_at) {
+      const endMs = new Date(data.voting_ends_at).getTime();
+      voting_deadline = data.voting_ends_at;
+      voting_closed = !!data.voting_finalized_at || Date.now() >= endMs;
+    } else {
+      const createdMs = data.created_at
+        ? new Date(data.created_at).getTime()
+        : NaN;
+      if (!isNaN(createdMs)) {
+        const deadlineMs = createdMs + VOTE_WINDOW_SECONDS * 1000;
+        voting_deadline = new Date(deadlineMs).toISOString();
+        voting_closed = Date.now() >= deadlineMs;
+      }
+    }
+
+    return res.json({
+      plan_id: data.id,
+      outing_id: data.outing_id,
+      created_at: data.created_at,
+      voting_starts_at: data.voting_starts_at,
+      voting_ends_at: data.voting_ends_at,
+      voting_finalized_at: data.voting_finalized_at,
+      voting_final_plan_id: data.voting_final_plan_id,
+      voting_deadline,
+      voting_closed,
+      ...normalized,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-vote", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const { email, userId: rawUserId, planIndex } = req.body || {};
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    if (typeof planIndex !== "number" || !Number.isInteger(planIndex)) {
+      return res.status(400).json({ error: "planIndex must be an integer" });
+    }
+
+    // assuming 3 plans (0,1,2)
+    if (planIndex < 0 || planIndex > 2) {
+      return res.status(400).json({ error: "planIndex must be 0, 1, or 2" });
+    }
+
+    let userId: string | null = null;
+
+    if (rawUserId && typeof rawUserId === "string" && rawUserId.trim()) {
+      userId = rawUserId.trim();
+    } else if (email && typeof email === "string" && email.trim()) {
+      const me = await getUserByEmail(email);
+      userId = me.user_id;
+    }
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId or email is required" });
+    }
+
+    // outing exists?
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member to vote
+    if (outing.creator_id !== userId) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (mErr) {
+        return res.status(500).json({ error: mErr.message });
+      }
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    // upsert vote: last vote wins
+    const { data, error } = await db
+      .from("outing_plan_votes")
+      .upsert(
+        {
+          outing_id: outingId,
+          user_id: userId,
+          plan_index: planIndex,
+        },
+        { onConflict: "outing_id,user_id" }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, vote: data });
+  } catch (e: any) {
+    console.error("Error saving plan vote:", e);
+    return res
+      .status(500)
+      .json({ error: e?.message || "Internal server error" });
+  }
+});
+
+// GET /api/outings/:id/plan-votes?email=me@example.com
+router.get("/outings/:id/plan-votes", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.query.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    // caller
+    const me = await getUserByEmail(email);
+
+    // outing exists?
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member
+    if (outing.creator_id !== me.user_id) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", me.user_id)
+        .maybeSingle();
+
+      if (mErr) {
+        return res.status(500).json({ error: mErr.message });
+      }
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    // raw votes
+    const { data: votes, error: vErr } = await db
+      .from("outing_plan_votes")
+      .select("user_id, plan_index")
+      .eq("outing_id", outingId);
+
+    if (vErr) {
+      return res.status(500).json({ error: vErr.message });
+    }
+
+    if (!votes || !votes.length) {
+      return res.json({ planVotes: [] });
+    }
+
+    const userIds = [...new Set(votes.map((v) => v.user_id))];
+
+    const { data: users, error: uErr } = await db
+      .from("users")
+      .select(
+        "user_id, email, first_name, last_name, profiles(display_name, avatar_path)"
+      )
+      .in("user_id", userIds);
+
+    if (uErr) {
+      return res.status(500).json({ error: uErr.message });
+    }
+
+    const byId = new Map((users || []).map((u: any) => [u.user_id, u]));
+
+    const grouped: Record<number, any[]> = {};
+    for (const v of votes) {
+      const u: any = byId.get(v.user_id) || {};
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+      if (!grouped[v.plan_index]) grouped[v.plan_index] = [];
+      grouped[v.plan_index].push({
+        user_id: v.user_id,
+        email: u.email,
+        name,
+        display_name: u.profiles?.display_name ?? null,
+        avatar_url: publicUrlFromPath(u.profiles?.avatar_path),
+        isMe: v.user_id === me.user_id,
+      });
+    }
+
+    const planVotes = Object.entries(grouped)
+      .map(([idx, voters]) => ({
+        planIndex: Number(idx),
+        voters,
+      }))
+      .sort((a, b) => a.planIndex - b.planIndex);
+
+    return res.json({ planVotes });
+  } catch (e: any) {
+    console.error("GET /outings/:id/plan-votes error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/reopen-if-tie", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // must be creator or member
+    if (outing.creator_id !== me.user_id) {
+      const { data: member, error: mErr } = await db
+        .from("outing_members")
+        .select("user_id")
+        .eq("outing_id", outingId)
+        .eq("user_id", me.user_id)
+        .maybeSingle();
+
+      if (mErr) return res.status(500).json({ error: mErr.message });
+      if (!member) {
+        return res
+          .status(403)
+          .json({ error: "You are not a member of this outing" });
+      }
+    }
+
+    const { data: votes, error: vErr } = await db
+      .from("outing_plan_votes")
+      .select("plan_index")
+      .eq("outing_id", outingId);
+
+    if (vErr) return res.status(500).json({ error: vErr.message });
+
+    // build counts, even if there are zero votes
+    const counts = new Map<number, number>();
+    for (const v of votes || []) {
+      const idx = v.plan_index;
+      counts.set(idx, (counts.get(idx) || 0) + 1);
+    }
+
+    let maxVotes = 0;
+    for (const c of counts.values()) {
+      if (c > maxVotes) maxVotes = c;
+    }
+
+    const winners = Array.from(counts.entries())
+      .filter(([_, c]) => c === maxVotes)
+      .map(([idx]) => idx);
+
+    // If there is exactly ONE winner → do NOT reopen
+    // If there are zero winners (no votes) OR multiple winners (tie) → reopen
+    if (winners.length === 1 && maxVotes > 0) {
+      return res
+        .status(400)
+        .json({ error: "Clear winner exists; not reopening voting" });
+    }
+
+    // new voting window
+    const nowIso = new Date().toISOString();
+    const newEndsIso = new Date(
+      Date.now() + VOTE_WINDOW_SECONDS * 1000
+    ).toISOString();
+
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({
+        voting_starts_at: nowIso,
+        voting_ends_at: newEndsIso,
+        voting_finalized_at: null,
+        voting_final_plan_id: null,
+        voting_end_notified: false,
+      })
+      .eq("outing_id", outingId);
+
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
+
+    // 🔔 new window → voting started email
+    sendVotingStartedEmails(outingId, newEndsIso).catch((e) =>
+      console.error("reopen-if-tie: voting started emails failed:", e)
+    );
+
+    return res.json({
+      ok: true,
+      voting_deadline: newEndsIso,
+    });
+  } catch (e: any) {
+    console.error("reopen-if-tie error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/close-early", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // only creator or admin can end voting early
+    if (!(await isAdminOrCreator(outingId, me.user_id))) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({
+        voting_finalized_at: nowIso,
+        voting_end_notified: true,
+      })
+      .eq("outing_id", outingId);
+
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
+
+    // 🔔 send "voting ended" immediately
+    sendVotingEndedEmails(outingId).catch((e) =>
+      console.error("close-early: voting ended emails failed:", e)
+    );
+
+    return res.json({
+      ok: true,
+      voting_finalized_at: nowIso,
+      voting_closed: true,
+    });
+  } catch (e: any) {
+    console.error("close-early error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/extend-30", async (req, res) => {
+  const outingId = Number(req.params.id);
+
+  const { data: planRow, error } = await db
+    .from("outing_plans")
+    .select("voting_ends_at")
+    .eq("outing_id", outingId)
+    .single();
+
+  if (error || !planRow?.voting_ends_at) {
+    return res.status(400).json({ error: "Voting end time not found" });
+  }
+
+  const currentEndMs = new Date(planRow.voting_ends_at).getTime();
+  if (Date.now() >= currentEndMs) {
+    return res.status(400).json({ error: "Voting already ended" });
+  }
+
+  const newEndIso = new Date(currentEndMs + 30 * 60 * 1000).toISOString();
+
+  await db
+    .from("outing_plans")
+    .update({ voting_ends_at: newEndIso })
+    .eq("outing_id", outingId);
+
+  return res.json({
+    ok: true,
+    voting_deadline: newEndIso,
+  });
+});
+
+router.get("/outings/:id/final-plan-pdf", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const planIndex = Number(req.query.planIndex || 0);
+
+    // Load saved plans
+    const { data, error } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return res.status(404).json({ error: "No plans found" });
+    }
+
+    const raw =
+      typeof data.plans === "string" ? JSON.parse(data.plans) : data.plans;
+
+    const plan = raw?.plans?.[planIndex];
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
+    }
+
+    // Load outing info
+    const { data: outingRow, error: outingErr } = await db
+      .from("outings")
+      .select("title, start_date, end_date")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    if (outingErr || !outingRow) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // Build safe dynamic filename
+    const safeTitle = (outingRow.title || "Outing")
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase();
+
+    const startStr = outingRow.start_date
+      ? new Date(outingRow.start_date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const endStr = outingRow.end_date
+      ? new Date(outingRow.end_date).toISOString().slice(0, 10)
+      : startStr;
+
+    const dateRangeStr =
+      startStr === endStr ? startStr : `${startStr} - ${endStr}`;
+
+    const filename = `VibeCheck_${safeTitle}_Final_Plan_${startStr}.pdf`;
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+
+    // Headers set for PDF download
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+
+    // cover page
+    doc
+      .fontSize(28)
+      .fillColor("#1976d2")
+      .text("VibeCheck Itinerary", { align: "center" });
+
+    doc.moveDown();
+    doc
+      .fontSize(16)
+      .fillColor("black")
+      .text(plan.title || "Selected Outing Plan", { align: "center" });
+
+    doc.moveDown();
+    doc
+      .fontSize(12)
+      .fillColor("#555")
+      .text(`Trip Dates: ${dateRangeStr}`, { align: "center" });
+
+    doc.moveDown(2);
+
+    if (plan.overview) {
+      doc.fontSize(14).fillColor("#333").text("Overview");
+      doc.moveDown(0.5);
+      doc.fontSize(12).fillColor("black").text(plan.overview);
+    }
+
+    doc.moveDown(2);
+
+    // highlights
+    doc
+      .fontSize(12)
+      .fillColor("black")
+      .text(`Budget: ${plan.total_budget_estimate || "—"}`)
+      .moveDown(0.3)
+      .text(`Avg Fairness Score: ${plan.avgFairnessIndex ?? "—"}%`);
+
+    if (Array.isArray(plan.badge)) {
+      doc
+        .moveDown(0.5)
+        .fillColor("#1976d2")
+        .text(`Badges: ${plan.badge.join(" • ")}`);
+    }
+
+    doc.addPage();
+
+    // itinerary section
+    doc.fontSize(20).fillColor("#1976d2").text("Daily Itinerary");
+    doc.moveDown();
+
+    for (const day of plan.itinerary || []) {
+      doc
+        .fontSize(16)
+        .fillColor("black")
+        .text(day.date || "Day", { underline: true });
+
+      doc.moveDown(0.5);
+
+      for (const stop of day.timeline || []) {
+        doc.fontSize(12).fillColor("#000");
+        doc
+          .fontSize(12)
+          .fillColor("#000")
+          .text(`${stop.time || ""} - ${stop.name || ""}`);
+
+        if (stop.address)
+          doc.fontSize(10).fillColor("#555").text(`Address: ${stop.address}`);
+
+        if (stop.description)
+          doc.fontSize(10).fillColor("#333").text(`Notes: ${stop.description}`);
+
+        if (stop.cost_estimate)
+          doc
+            .fontSize(10)
+            .fillColor("#333")
+            .text(`Cost: ${stop.cost_estimate}`);
+
+        doc.moveDown(0.6);
+      }
+
+      doc.moveDown(1.2);
+    }
+
+    // Ai SUMMARY SECTION
+    if (plan.summary?.text) {
+      doc.addPage();
+
+      doc.fontSize(20).fillColor("#1976d2").text("AI Summary");
+
+      doc.moveDown();
+      doc.fontSize(12).fillColor("black").text(plan.summary.text, {
+        lineGap: 4,
+      });
+    }
+
+    doc.end();
+  } catch (err: any) {
+    console.error("PDF Error:", err);
+
+    // Only send error if headers NOT already streamed
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  }
+});
+
+function getFrontendUrl() {
+  return process.env.FRONTEND_URL || "http://localhost:4200";
+}
+
+router.post("/outings/:id/share", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    const FRONTEND_URL = getFrontendUrl();
+
+    // Check if link already exists
+    const { data: existing, error: existingErr } = await db
+      .from("outing_share_links")
+      .select("share_token")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (existingErr) {
+      return res.status(500).json({ error: existingErr.message });
+    }
+
+    // If already exists → reuse
+    if (existing?.share_token) {
+      return res.json({
+        shareUrl: `${FRONTEND_URL}/share/${existing.share_token}`,
+      });
+    }
+
+    // Generate new token
+    const token = crypto.randomBytes(24).toString("hex");
+
+    const { error: insertErr } = await db.from("outing_share_links").insert([
+      {
+        outing_id: outingId,
+        share_token: token,
+      },
+    ]);
+
+    if (insertErr) {
+      return res.status(500).json({ error: insertErr.message });
+    }
+
+    // Return new share link
+    res.json({
+      shareUrl: `${FRONTEND_URL}/share/${token}`,
+    });
+  } catch (err) {
+    console.error("Share link error:", err);
+    res.status(500).json({ error: "Failed to generate share link" });
+  }
+});
+
+router.get("/public/share/:token", async (req, res) => {
+  try {
+    const token = req.params.token;
+
+    // Resolve token → outing_id
+    const { data: link, error: linkErr } = await db
+      .from("outing_share_links")
+      .select("outing_id")
+      .eq("share_token", token)
+      .maybeSingle();
+
+    if (linkErr) {
+      return res.status(500).json({ error: linkErr.message });
+    }
+
+    if (!link) {
+      return res.status(404).json({ error: "Invalid share link" });
+    }
+
+    const outingId = link.outing_id;
+
+    // Load outing data
+    const { data: outingRow, error: outingErr } = await db
+      .from("outings")
+      .select("title, location, start_date, end_date")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    if (outingErr) {
+      return res.status(500).json({ error: outingErr.message });
+    }
+
+    // Load finalized plans
+    const { data: plansRow, error: planErr } = await db
+      .from("outing_plans")
+      .select("plans")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (planErr) {
+      return res.status(500).json({ error: planErr.message });
+    }
+
+    if (!outingRow || !plansRow) {
+      return res.status(404).json({ error: "Outing data missing" });
+    }
+
+    const plans =
+      typeof plansRow.plans === "string"
+        ? JSON.parse(plansRow.plans)
+        : plansRow.plans;
+
+    const finalPlan = plans?.plans?.[0];
+
+    // Return read-only public payload
+    res.json({
+      outing: outingRow,
+      plan: finalPlan,
+    });
+  } catch (err) {
+    console.error("Public share error:", err);
+    res.status(500).json({ error: "Failed to load shared outing" });
+  }
+});
+
+router.post("/outings/:id/plan-voting/finalize", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    const email = String(req.body?.email || "");
+    const winningIndex = Number(req.body?.planIndex);
+
+    if (!outingId || !Number.isInteger(outingId)) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+    if (
+      !Number.isInteger(winningIndex) ||
+      winningIndex < 0 ||
+      winningIndex > 2
+    ) {
+      return res.status(400).json({ error: "planIndex must be 0, 1 or 2" });
+    }
+
+    const me = await getUserByEmail(email);
+    const outing = await getOuting(outingId);
+    if (!outing) {
+      return res.status(404).json({ error: "Outing not found" });
+    }
+
+    // only creator or admin can finalize
+    if (!(await isAdminOrCreator(outingId, me.user_id))) {
+      return res.status(403).json({ error: "Not allowed to finalize voting" });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const { error: updErr } = await db
+      .from("outing_plans")
+      .update({
+        voting_finalized_at: nowIso,
+        voting_final_plan_id: winningIndex, // or plan.planId if you prefer
+      })
+      .eq("outing_id", outingId);
+
+    if (updErr) {
+      return res.status(500).json({ error: updErr.message });
+    }
+
+    return res.json({
+      ok: true,
+      voting_finalized_at: nowIso,
+      voting_final_plan_id: winningIndex,
+    });
+  } catch (e: any) {
+    console.error("finalize voting error", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
+
+// Helper to parse "9:00 AM - 12:00 PM" into ICS date/time strings
+function parseTimeRange(dateStr: string, timeStr: string) {
+  try {
+    if (!timeStr || !dateStr) return null;
+
+    // Normalize input
+    const clean = timeStr.toLowerCase().replace(/\./g, "").trim();
+
+    // Regex matches: "9:00 am - 5:00 pm" or "9 am - 5 pm"
+    // Groups: 1=StartHour, 2=StartMin, 3=StartAmPm, 4=EndHour, 5=EndMin, 6=EndAmPm
+    const regex =
+      /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i;
+    const match = clean.match(regex);
+
+    if (!match) return null;
+
+    let [_, sH, sM, sMeridiem, eH, eM, eMeridiem] = match;
+
+    // Helper to convert 12h to 24h format
+    const to24h = (h: string, m: string, meridiem: string) => {
+      let hour = parseInt(h, 10);
+      const min = m ? parseInt(m, 10) : 0;
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      if (meridiem === "am" && hour === 12) hour = 0;
+      return { hour, min };
+    };
+
+    // If end meridiem exists but start doesn't (e.g. "9 - 11 AM"), assume start matches end
+    if (eMeridiem && !sMeridiem) sMeridiem = eMeridiem;
+
+    const start = to24h(sH, sM, sMeridiem);
+    const end = to24h(eH, eM, eMeridiem);
+
+    // Format to YYYYMMDDTHHMMSS (Floating time - no 'Z', uses user's calendar timezone)
+    const format = (h: number, m: number) => {
+      const hh = h.toString().padStart(2, "0");
+      const mm = m.toString().padStart(2, "0");
+      return `${dateStr.replace(/-/g, "")}T${hh}${mm}00`;
+    };
+
+    return {
+      start: format(start.hour, start.min),
+      end: format(end.hour, end.min),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+router.post("/outings/:id/export", async (req, res) => {
+  try {
+    const outingId = Number(req.params.id);
+    if (!outingId) {
+      return res.status(400).json({ error: "Invalid outing id" });
+    }
+
+    // 1. Fetch Plan
+    const { data: planRow, error: planErr } = await db
+      .from("outing_plans")
+      .select("plans, voting_final_plan_id")
+      .eq("outing_id", outingId)
+      .maybeSingle();
+
+    if (planErr || !planRow || planRow.voting_final_plan_id === null) {
+      return res.status(400).json({ error: "Finalized plan not found." });
+    }
+
+    const { data: outingRow } = await db
+      .from("outings")
+      .select("title, location")
+      .eq("id", outingId)
+      .maybeSingle();
+
+    // 2. Extract Winning Plan
+    const rawPlans =
+      typeof planRow.plans === "string"
+        ? JSON.parse(planRow.plans)
+        : planRow.plans;
+    const finalPlan = rawPlans?.plans?.[planRow.voting_final_plan_id];
+
+    if (!finalPlan)
+      return res.status(404).json({ error: "Plan data missing." });
+
+    // 3. Prepare ICS Header
+    const now =
+      new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    let icsContent =
+      [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//VibeCheck//Outing Plan//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+      ].join("\r\n") + "\r\n";
+
+    // 4. Loop Days
+    if (finalPlan.itinerary && Array.isArray(finalPlan.itinerary)) {
+      finalPlan.itinerary.forEach((day: any, dIndex: number) => {
+        if (!day.date) return;
+        const safeDate = day.date.replace(/-/g, "");
+
+        // --- A. Create "Daily Summary" (All Day Event) ---
+        let dailyDesc = `Daily Overview:\n`;
+        if (day.timeline) {
+          day.timeline.forEach((s: any) => {
+            dailyDesc += `• ${s.time || "TBD"}: ${s.name || "Activity"}\n`;
+          });
+        }
+
+        icsContent +=
+          [
+            "BEGIN:VEVENT",
+            `UID:vibecheck-${outingId}-day-${dIndex}-${now}`,
+            `DTSTAMP:${now}`,
+            `DTSTART;VALUE=DATE:${safeDate}`,
+            `SUMMARY:📅 ${outingRow?.title || "Trip"} - Day ${dIndex + 1}`,
+            `DESCRIPTION:${dailyDesc}`,
+            `LOCATION:${outingRow?.location || ""}`,
+            "END:VEVENT",
+          ].join("\r\n") + "\r\n";
+
+        // --- B. Create Individual Events (if time is parseable) ---
+        if (day.timeline && Array.isArray(day.timeline)) {
+          day.timeline.forEach((stop: any, sIndex: number) => {
+            const timeRange = parseTimeRange(day.date, stop.time);
+
+            if (timeRange) {
+              // We successfully parsed the time! Create a specific event.
+              icsContent +=
+                [
+                  "BEGIN:VEVENT",
+                  `UID:vibecheck-${outingId}-stop-${dIndex}-${sIndex}-${now}`,
+                  `DTSTAMP:${now}`,
+                  `DTSTART:${timeRange.start}`,
+                  `DTEND:${timeRange.end}`,
+                  `SUMMARY:${stop.name || "Activity"}`,
+                  `DESCRIPTION:${stop.description || ""} (Cost: ${
+                    stop.cost_estimate || "N/A"
+                  })`,
+                  `LOCATION:${stop.address || ""}`,
+                  "END:VEVENT",
+                ].join("\r\n") + "\r\n";
+            }
+          });
+        }
+      });
+    }
+
+    icsContent += "END:VCALENDAR";
+
+    const filename = `VibeCheck_Plan_${outingId}.ics`;
+    res.setHeader("Content-Type", "text/calendar");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(icsContent);
+  } catch (e: any) {
+    console.error("Export ICS Error:", e);
+    return res.status(500).json({ error: e?.message || "Server error" });
+  }
+});
 
 export default router;

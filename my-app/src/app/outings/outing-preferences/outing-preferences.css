@@ -1,0 +1,199 @@
+/* Container */
+.detail-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+  display: grid;
+  gap: 24px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: #0f172a;
+}
+
+/* Page */
+.page-content {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 18px 8px;
+}
+
+/* Header */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.page-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sub,
+.section-sub {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #dbeafe;
+}
+
+/* Sections */
+.section {
+  margin-top: 18px;
+}
+.section-title {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Chip cloud */
+.interests-field {
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+
+.chip-cloud ::ng-deep .mat-mdc-chip-set {
+  row-gap: 8px;
+  column-gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Pretty capsule chips */
+.chip-cloud ::ng-deep .mat-mdc-chip-option {
+  position: relative;
+  border-radius: 999px;
+  padding: 8px 18px;
+  background: #fff;
+  border: 1.5px solid #94a3b8;
+  color: #0f172a;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  outline: none !important;
+  cursor: pointer;
+  user-select: none;
+  --mdc-chip-container-height: 40px;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.chip-cloud ::ng-deep .mdc-evolution-chip__focus-ring {
+  display: none;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option:hover {
+  background: #f1f5f9;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected {
+  background: #1e88e5;
+  color: #fff !important;
+  border-color: #1e88e5;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected,
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__action,
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__cell,
+.chip-cloud ::ng-deep .mat-mdc-chip-option.mat-mdc-chip-selected .mdc-evolution-chip__text-label {
+  color: #fff !important;
+}
+.chip-cloud
+  ::ng-deep
+  .mat-mdc-chip-option.mat-mdc-chip-selected
+  .mdc-evolution-chip__checkmark-path {
+  stroke: #fff !important;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option,
+.chip-cloud ::ng-deep .mat-mdc-chip-option * {
+  pointer-events: auto;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option {
+  border-radius: 999px !important;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__ripple,
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action,
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__cell {
+  border-radius: inherit;
+}
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action::before,
+.chip-cloud ::ng-deep .mat-mdc-chip-option .mdc-evolution-chip__action::after {
+  border-radius: inherit;
+}
+
+/* Custom option field */
+.custom-option-field {
+  width: 100%;
+}
+.custom-option-field ::ng-deep .mdc-text-field--outlined {
+  border-radius: 10px;
+}
+.custom-option-field ::ng-deep .mdc-notched-outline__leading,
+.custom-option-field ::ng-deep .mdc-notched-outline__trailing,
+.custom-option-field ::ng-deep .mdc-notched-outline__notch {
+  border-color: #e5e7eb !important;
+}
+.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__leading,
+.custom-option-field ::ng-deep .mdc-text-field:hover .mdc-notched-outline__trailing,
+.custom-option-field ::ng-deep .mdc-notched-outline__notch {
+  border-color: #d1d5db !important;
+}
+
+/* Actions */
+.navigation-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: #ffffffcc;
+  backdrop-filter: blur(6px);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+}
+.navigation-buttons :where(button[mat-flat-button], button[mat-stroked-button]) {
+  min-width: 120px;
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .detail-wrap {
+    padding: 16px 12px 72px;
+  }
+  .page-head h1 {
+    font-size: 18px;
+  }
+  .step {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+}

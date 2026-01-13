@@ -1,0 +1,69 @@
+<app-header [showOutings]="true"></app-header>
+
+<main class="chat-wrap" aria-label="Outing group chat">
+  <!-- Header -->
+  <header class="chat-top">
+    <div class="peer">
+      <div class="peer-texts">
+        <h1 class="peer-name">
+          {{ outingTitle() || 'Outing Group Chat' }}
+        </h1>
+        <div class="peer-sub">Group chat for this outing</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Status -->
+  <div *ngIf="loading()" class="muted center">Loading messages…</div>
+  <div *ngIf="error()" class="alert center">{{ error() }}</div>
+
+  <!-- Messages -->
+  <section class="chat-scroller" #scroller *ngIf="!error()">
+    <ul class="msg-list">
+      <li
+        class="message-row"
+        *ngFor="let m of messages(); trackBy: trackById"
+        [class.me]="m.sender_id === meUserId"
+      >
+        <div class="bubble">
+          <!-- 🔹 Sender header -->
+          <div class="msg-header">
+            <img
+              class="msg-ava"
+              [src]="m.sender?.avatar_url || 'assets/default_pfp.jpg'"
+              alt=""
+              (error)="onSenderImgError($event)"
+            />
+            <div class="msg-header-texts">
+              <div class="msg-name">
+                {{ m.sender?.display_name || m.sender?.name || m.sender?.email || 'Unknown' }}
+              </div>
+              <div class="msg-time">
+                {{ m.created_at | date : 'short' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Body -->
+          <div class="bubble-body">
+            {{ m.body }}
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Composer -->
+  <footer class="composer">
+    <input
+      class="composer-input"
+      type="text"
+      placeholder="Message the group…"
+      [value]="draft()"
+      (input)="draft.set($any($event.target).value || '')"
+      (keydown.enter)="send()"
+      aria-label="Group message input"
+    />
+    <button class="send-btn" (click)="send()" [disabled]="!draft().trim()">Send</button>
+  </footer>
+</main>

@@ -1,14 +1,15 @@
 import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { HeaderComponent } from '../header/header';
 
 @Component({
   selector: 'app-homepage',
   standalone: true,
-  imports: [CommonModule, HeaderComponent],
+  imports: [CommonModule, RouterModule, HeaderComponent],
   templateUrl: './homepage.html',
-  styleUrl: './homepage.css',
+  styleUrls: ['./homepage.css'],
 })
 export class Homepage {
   userEmail = sessionStorage.getItem('userEmail') || '';
