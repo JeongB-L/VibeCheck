@@ -106,5 +106,3 @@ Navigate to `http://localhost:4200/` in your browser.
 * **Meet Patel**
 * **Ji Bing Ni**
 * **Hosung (Dennis) Ryu**
-
-```
